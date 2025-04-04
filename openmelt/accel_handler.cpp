@@ -16,7 +16,7 @@
 #include "melty_config.h"
 #include "accel_handler.h"
 #include <Wire.h>
-#include "SparkFun_LIS331.h"
+#include "src/SparkFun_LIS331/src/SparkFun_LIS331.h"
 
 LIS331 xl;
 

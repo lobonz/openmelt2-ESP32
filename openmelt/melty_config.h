@@ -37,17 +37,17 @@
 //Common RC receiver setup LEFTRIGHT = CH1, FORBACK = CH2, THROTTLE = CH3
 //Note: Accelerometer is connected with default Arduino SDA / SCL pins
 
-#define LEFTRIGHT_RC_CHANNEL_PIN 7                //To Left / Right on RC receiver
+#define LEFTRIGHT_RC_CHANNEL_PIN 3                //To Left / Right on RC receiver
 #define FORBACK_RC_CHANNEL_PIN 1                  //To Forward / Back on RC receiver (Pin 1 on Arduino Micro labelled as "TX" - https://docs.arduino.cc/hacking/hardware/PinMapping32u4)
-#define THROTTLE_RC_CHANNEL_PIN 0                 //To Throttle on RC receiver (Pin 0 on Arduino Micro labelled as "RX" - https://docs.arduino.cc/hacking/hardware/PinMapping32u4)
+#define THROTTLE_RC_CHANNEL_PIN 5                 //To Throttle on RC receiver (Pin 0 on Arduino Micro labelled as "RX" - https://docs.arduino.cc/hacking/hardware/PinMapping32u4)
 
-#define HEADING_LED_PIN	8                         //To heading LED (pin 13 is on-board Arduino LED)
+#define HEADING_LED_PIN	7                         //To heading LED (pin 13 is on-board Arduino LED)
 
 //no configuration changes are needed if only 1 motor is used!
 #define MOTOR_PIN1 9                              //Pin for Motor 1 driver
 #define MOTOR_PIN2 10                             //Pin for Motor 2 driver
 
-#define BATTERY_ADC_PIN A0                        //Pin for battery monitor (if enabled)
+#define BATTERY_ADC_PIN 14                        //Pin for battery monitor (if enabled) changed from A0 for Arduino to 14 for M5StampS3-1.27
 
 
 //----------THROTTLE CONFIGURATION----------
@@ -72,7 +72,7 @@ enum throttle_modes {
                         //This mode reduces current levels during spin up at part throttle
 };
 
-#define THROTTLE_TYPE BINARY_THROTTLE      //<---Throttle type set here!
+#define THROTTLE_TYPE DYNAMIC_PWM_THROTTLE      //<---Throttle type set here!
 
 #define DYNAMIC_PWM_MOTOR_ON_PORTION 0.5f       //if defined (and DYNAMIC_PWM_THROTTLE is set) portion of each rotation motor is on is fixed at this value
                                                 //About 0.5f for best translation (higher for increased RPM)

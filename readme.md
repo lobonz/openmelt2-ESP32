@@ -1,5 +1,18 @@
 # Open Melt
 
+NOTE: This fork is currently a work in progress.
+The Intention is to run this on ESP32
+Specifically the [**M5 Stamp S3**](https://docs.m5stack.com/en/core/M5StampS3%20PIN1.27)
+
+<div align="center">
+<table class="center"><tr><td align="center">
+<img src="./m5_stamp_s3_reference/M5StampS3-1.27.webp" alt="M5StampS3" width="180"/></td></tr></table></div>
+
+The SparkFun_LIS331 library has been included in the src folder so the OPEN_DRAIN variable could be changed to OPEN_DRAIN_MODE to prevent it clashing with a variable of the same name in the M5 Stack libraries - this is the only change to the accelerometer library.
+There may be a better way to deal with this?
+
+----
+
 Open Melt is an open-source translational drift (aka "melty brain") robot controller based on Arduino.
 
 A translational drift robot spins its entire body using its drive wheel(s), but is still capable of directional control by modulating motor power at certain points each rotation.  To achieve this - the rate of rotation must be tracked.

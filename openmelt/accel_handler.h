@@ -1,4 +1,4 @@
-#include "SparkFun_LIS331.h"
+#include "src/SparkFun_LIS331/src/SparkFun_LIS331.h"
 
 //Set high enough to allow for G forces at top RPM
 //LOW_RANGE - +/-100g for the H3LIS331DH
