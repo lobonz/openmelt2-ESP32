@@ -37,9 +37,10 @@
 //Common RC receiver setup LEFTRIGHT = CH1, FORBACK = CH2, THROTTLE = CH3
 //Note: Accelerometer is connected with default Arduino SDA / SCL pins
 
-#define LEFTRIGHT_RC_CHANNEL_PIN 3                //To Left / Right on RC receiver
-#define FORBACK_RC_CHANNEL_PIN 1                  //To Forward / Back on RC receiver (Pin 1 on Arduino Micro labelled as "TX" - https://docs.arduino.cc/hacking/hardware/PinMapping32u4)
-#define THROTTLE_RC_CHANNEL_PIN 5                 //To Throttle on RC receiver (Pin 0 on Arduino Micro labelled as "RX" - https://docs.arduino.cc/hacking/hardware/PinMapping32u4)
+#define LEFTRIGHT_RC_CHANNEL_PIN 2                // To Left / Right on RC receiver
+#define FORBACK_RC_CHANNEL_PIN 1                  // To Forward / Back on RC receiver (Pin 1 on Arduino Micro labelled as "TX" - https://docs.arduino.cc/hacking/hardware/PinMapping32u4)
+#define THROTTLE_RC_CHANNEL_PIN 3                 // To Throttle on RC receiver (Pin 0 on Arduino Micro labelled as "RX" - https://docs.arduino.cc/hacking/hardware/PinMapping32u4)
+#define EMERGENCY_OFF 4                           // To cut power to both ESCs
 
 #define HEADING_LED_PIN	7                         //To heading LED (pin 13 is on-board Arduino LED)
 
