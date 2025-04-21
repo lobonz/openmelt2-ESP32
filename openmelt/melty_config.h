@@ -18,7 +18,7 @@
 //----------TRANSLATIONAL DRIFT SETTINGS----------
 //"DEFAULT" values are overriden by interactive config / stored in EEPROM (interactive config will be easier if they are about correct)
 //To force these values to take effect after interactive config - increment EEPROM_WRITTEN_SENTINEL_VALUE
-#define DEFAULT_ACCEL_MOUNT_RADIUS_CM 3.9         //Radius of accelerometer from center of robot
+#define DEFAULT_ACCEL_MOUNT_RADIUS_CM 10.0         //Radius of accelerometer from center of robot
 #define DEFAULT_LED_OFFSET_PERCENT 7              //Adjust to make heading LED line up with direction robot travels 0-99 (increasing moves beacon clockwise)
                                                    
 #define DEFAULT_ACCEL_ZERO_G_OFFSET 0.0f          //Value accelerometer returns with robot at rest (in G) - adjusts for any offset
@@ -30,6 +30,23 @@
 
 #define MIN_TRANSLATION_RPM 400                   //full power spin in below this number (increasing can reduce spin-up time)
 
+//----------RGB LED CONFIGURATION----------
+#define USE_RGB_LED true                         // Set to true to use RGB LED, false for standard LED
+#define NUM_RGB_LEDS 1                            // Number of RGB LEDs in the strip/chain
+#define RGB_LED_TYPE WS2812B                      // Type of RGB LED being used
+
+// RGB LED color options
+enum led_color_t {
+  RED,
+  BLUE,
+  YELLOW,
+  GREEN,
+  PURPLE,
+  MAGENTA,
+  ORANGE
+};
+
+#define RGB_LED_COLOR MAGENTA                       // Default color for RGB LED
 
 //----------PIN MAPPINGS----------
 //RC pins must be Arduino interrupt pins
@@ -42,7 +59,7 @@
 #define THROTTLE_RC_CHANNEL_PIN 3                 // To Throttle on RC receiver (Pin 0 on Arduino Micro labelled as "RX" - https://docs.arduino.cc/hacking/hardware/PinMapping32u4)
 #define EMERGENCY_OFF 4                           // To cut power to both ESCs
 
-#define HEADING_LED_PIN	7                         //To heading LED (pin 13 is on-board Arduino LED)
+#define HEADING_LED_PIN	21                        //To heading LED (pin 21 is on-board M5StampS3 RGB LED)
 
 //no configuration changes are needed if only 1 motor is used!
 #define MOTOR_PIN1 9                              //Pin for Motor 1 driver
