@@ -9,7 +9,7 @@
 //490Hz PWM-throttle behavior is specific to Atmega32u4 (see below)
 
 //----------DIAGNOSTICS----------
-#define JUST_DO_DIAGNOSTIC_LOOP                 //Disables the robot / just displays config / battery voltage / RC info via serial
+// #define JUST_DO_DIAGNOSTIC_LOOP                 //Disables the robot / just displays config / battery voltage / RC info via serial
 
 //----------EEPROM----------
 #define ENABLE_EEPROM_STORAGE                     //Comment out this to disable EEPROM (for ARM)
