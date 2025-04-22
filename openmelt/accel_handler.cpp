@@ -22,7 +22,7 @@ LIS331 xl;
 
 void init_accel() {
 
-  Wire.begin();
+  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);  // Initialize I2C with the pins defined in melty_config.h
   
   Wire.setClock(400000);  //increase I2C speed to reduce read times a bit
                           //value of 400000 allows accel read in ~1ms and

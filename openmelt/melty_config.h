@@ -9,7 +9,7 @@
 //490Hz PWM-throttle behavior is specific to Atmega32u4 (see below)
 
 //----------DIAGNOSTICS----------
-//#define JUST_DO_DIAGNOSTIC_LOOP                 //Disables the robot / just displays config / battery voltage / RC info via serial
+#define JUST_DO_DIAGNOSTIC_LOOP                 //Disables the robot / just displays config / battery voltage / RC info via serial
 
 //----------EEPROM----------
 #define ENABLE_EEPROM_STORAGE                     //Comment out this to disable EEPROM (for ARM)
@@ -53,6 +53,10 @@ enum led_color_t {
 //we need 3 interrupt pins - which requires an Arduino with Atmega32u4 or better (Atmega328 only support 2 interrupts)
 //Common RC receiver setup LEFTRIGHT = CH1, FORBACK = CH2, THROTTLE = CH3
 //Note: Accelerometer is connected with default Arduino SDA / SCL pins
+
+//I2C pins for M5 Stamp S3
+#define I2C_SDA_PIN 13                          // SDA pin for I2C communication (M5 Stamp S3 uses pin 13, Arduino uses pin A4)
+#define I2C_SCL_PIN 15                          // SCL pin for I2C communication (M5 Stamp S3 uses pin 15, Arduino uses pin A5)
 
 #define LEFTRIGHT_RC_CHANNEL_PIN 2                // To Left / Right on RC receiver
 #define FORBACK_RC_CHANNEL_PIN 1                  // To Forward / Back on RC receiver (Pin 1 on Arduino Micro labelled as "TX" - https://docs.arduino.cc/hacking/hardware/PinMapping32u4)
@@ -108,7 +112,7 @@ enum throttle_modes {
 
 
 //----------BATTERY MONITOR----------
-#define BATTERY_ALERT_ENABLED                     //if enabled - heading LED will flicker when battery voltage is low
+//#define BATTERY_ALERT_ENABLED                     //if enabled - heading LED will flicker when battery voltage is low
 #define VOLTAGE_DIVIDER 11                        //(~10:1 works well - 10kohm to GND, 100kohm to Bat+).  Resistors have tolerances!  Adjust as needed...
 #define BATTERY_ADC_WARN_VOLTAGE_THRESHOLD 7.0f  //If voltage drops below this value - then alert is triggered
 #define ARDUINIO_VOLTAGE 5.0f                     //Needed for ADC maths for battery monitor
