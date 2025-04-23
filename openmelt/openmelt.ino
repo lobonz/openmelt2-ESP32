@@ -366,7 +366,7 @@ void loop() {
     }
   } else {
     // Default behavior when motor test not enabled
-    motors_off();
+  motors_off();
   }
   
   heading_led_on(0); delay(30);

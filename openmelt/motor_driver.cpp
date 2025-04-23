@@ -253,8 +253,8 @@ void init_motors() {
     // Use the arming function (without calibration)
     arm_calibrate_escs(false);
   } else {
-    pinMode(MOTOR_PIN1, OUTPUT);
-    pinMode(MOTOR_PIN2, OUTPUT);
+  pinMode(MOTOR_PIN1, OUTPUT);
+  pinMode(MOTOR_PIN2, OUTPUT);
   }
   motors_off();
 }
