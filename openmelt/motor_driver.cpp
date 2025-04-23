@@ -9,6 +9,76 @@
 Servo motor1_servo;
 Servo motor2_servo;
 
+// Variables to store current PWM values
+int current_motor1_pulse_width = 1500;
+int current_motor2_pulse_width = 1500;
+
+// Flag to enable direct ESC control (bypasses translational drift)
+bool direct_esc_control = false;
+
+// Getter functions for current PWM values
+int get_motor1_pulse_width() {
+  return current_motor1_pulse_width;
+}
+
+int get_motor2_pulse_width() {
+  return current_motor2_pulse_width;
+}
+
+// Function to enable/disable direct ESC control
+void set_direct_esc_control(bool enable) {
+  direct_esc_control = enable;
+  if (enable) {
+    Serial.println("*** DIRECT ESC CONTROL ENABLED ***");
+    Serial.println("Bypassing translational drift for direct throttle testing");
+  } else {
+    Serial.println("*** DIRECT ESC CONTROL DISABLED ***");
+    Serial.println("Returning to normal translational drift control");
+  }
+}
+
+// Function to directly set ESC throttle for testing
+// throttle_percent should be 0.0-1.0
+void set_esc_throttle(float throttle_percent) {
+  if (!direct_esc_control) return;
+  
+  if (THROTTLE_TYPE == SERVO_PWM_THROTTLE) {
+    // Map throttle_percent (0-1.0) to pulse width (1500-2000μs)
+    int pulse_width = 1500;
+    if (throttle_percent > 0) {
+      pulse_width = 1500 + (throttle_percent * 500);
+    }
+    
+    // Set both ESCs to the same throttle
+    current_motor1_pulse_width = pulse_width;
+    current_motor2_pulse_width = pulse_width;
+    motor1_servo.writeMicroseconds(pulse_width);
+    motor2_servo.writeMicroseconds(pulse_width);
+    
+    Serial.print("Direct ESC Control - Throttle: ");
+    Serial.print(throttle_percent * 100);
+    Serial.print("%, PWM: ");
+    Serial.println(pulse_width);
+  }
+}
+
+// Function to update PWM values for diagnostics
+void update_pwm_values(int motor1_pwm, int motor2_pwm) {
+  current_motor1_pulse_width = motor1_pwm;
+  current_motor2_pulse_width = motor2_pwm;
+}
+
+// Function to directly set servo PWM values
+void set_servo_pwm(int motor_pin, int pulse_width) {
+  if (motor_pin == MOTOR_PIN1) {
+    current_motor1_pulse_width = pulse_width;
+    motor1_servo.writeMicroseconds(pulse_width);
+  } else if (motor_pin == MOTOR_PIN2) {
+    current_motor2_pulse_width = pulse_width;
+    motor2_servo.writeMicroseconds(pulse_width);
+  }
+}
+
 // Function to arm or calibrate ESCs
 // For normal operation, just call init_motors()
 // For calibration, call this function with calibrate=true
@@ -25,12 +95,16 @@ void arm_calibrate_escs(bool calibrate) {
     Serial.println("Calibration: Set throttle to maximum");
     motor1_servo.writeMicroseconds(2000);
     motor2_servo.writeMicroseconds(2000);
+    current_motor1_pulse_width = 2000;
+    current_motor2_pulse_width = 2000;
     delay(5000);
     
     // 2. Send neutral signal
     Serial.println("Calibration: Set throttle to neutral");
     motor1_servo.writeMicroseconds(1500);
     motor2_servo.writeMicroseconds(1500);
+    current_motor1_pulse_width = 1500;
+    current_motor2_pulse_width = 1500;
     delay(5000);
     
     Serial.println("Calibration complete - ESCs should now be calibrated");
@@ -39,6 +113,8 @@ void arm_calibrate_escs(bool calibrate) {
     // Start with neutral signal
     motor1_servo.writeMicroseconds(1500);
     motor2_servo.writeMicroseconds(1500);
+    current_motor1_pulse_width = 1500;
+    current_motor2_pulse_width = 1500;
     delay(1000);  // Give ESCs time to initialize
   }
 }
@@ -48,6 +124,16 @@ void arm_calibrate_escs(bool calibrate) {
 //motor_X_off functions are used for when the robot is spun-down
 
 void motor_on(float throttle_percent, int motor_pin) {
+
+  // Debug output every 500ms
+  static unsigned long last_debug = 0;
+  if (millis() - last_debug > 500) {
+    Serial.print("Motor_on called - Throttle percent: ");
+    Serial.print(throttle_percent * 100);
+    Serial.print("%, Motor pin: ");
+    Serial.println(motor_pin);
+    last_debug = millis();
+  }
 
   if (THROTTLE_TYPE == BINARY_THROTTLE) {
     digitalWrite(motor_pin, HIGH);
@@ -69,10 +155,27 @@ void motor_on(float throttle_percent, int motor_pin) {
     // For standard RC servo PWM with bi-directional ESCs
     // Map throttle_percent (0-1.0) to pulse width (1500-2000μs)
     // 1500μs = 0% throttle (neutral), 2000μs = 100% throttle (forward)
-    int pulse_width = 1500 + (throttle_percent * 500);
+    int pulse_width = 1500;
+    
+    // Only change from neutral if throttle is actually above 0
+    if (throttle_percent > 0) {
+      pulse_width = 1500 + (throttle_percent * 500);
+    }
+    
+    // Debug pulse width calculation
+    if (millis() - last_debug > 500) {
+      Serial.print("Input throttle: ");
+      Serial.print(throttle_percent * 100);
+      Serial.print("%, Output PWM: ");
+      Serial.print(pulse_width);
+      Serial.println("μs");
+    }
+    
     if (motor_pin == MOTOR_PIN1) {
+      current_motor1_pulse_width = pulse_width;
       motor1_servo.writeMicroseconds(pulse_width);
     } else if (motor_pin == MOTOR_PIN2) {
+      current_motor2_pulse_width = pulse_width;
       motor2_servo.writeMicroseconds(pulse_width);
     }
   }
@@ -96,8 +199,10 @@ void motor_coast(int motor_pin) {
   if (THROTTLE_TYPE == SERVO_PWM_THROTTLE) {
     // For bi-directional ESCs, send neutral pulse width (1500μs = 0% throttle)
     if (motor_pin == MOTOR_PIN1) {
+      current_motor1_pulse_width = 1500;
       motor1_servo.writeMicroseconds(1500);
     } else if (motor_pin == MOTOR_PIN2) {
+      current_motor2_pulse_width = 1500;
       motor2_servo.writeMicroseconds(1500);
     }
   }
@@ -121,8 +226,10 @@ void motor_off(int motor_pin) {
   if (THROTTLE_TYPE == SERVO_PWM_THROTTLE) {
     // For bi-directional ESCs, send neutral pulse width (1500μs = 0% throttle)
     if (motor_pin == MOTOR_PIN1) {
+      current_motor1_pulse_width = 1500;
       motor1_servo.writeMicroseconds(1500);
     } else if (motor_pin == MOTOR_PIN2) {
+      current_motor2_pulse_width = 1500;
       motor2_servo.writeMicroseconds(1500);
     }
   }

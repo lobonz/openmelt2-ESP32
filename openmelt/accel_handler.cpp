@@ -41,5 +41,25 @@ void init_accel() {
 float get_accel_force_g() {
   int16_t x, y, z;
   xl.readAxes(x, y, z);
+  
+  // Debug output for raw accelerometer readings
+  static unsigned long last_accel_debug = 0;
+  if (millis() - last_accel_debug > 2000) {  // Every 2 seconds to reduce spam
+    float x_g = xl.convertToG(ACCEL_MAX_SCALE, x);
+    float y_g = xl.convertToG(ACCEL_MAX_SCALE, y);
+    float z_g = xl.convertToG(ACCEL_MAX_SCALE, z);
+    
+    Serial.print("Raw Accel - X: ");
+    Serial.print(x_g);
+    Serial.print("g, Y: ");
+    Serial.print(y_g);
+    Serial.print("g, Z: ");
+    Serial.print(z_g);
+    Serial.print("g, Used value: ");
+    Serial.println(xl.convertToG(ACCEL_MAX_SCALE, x));
+    
+    last_accel_debug = millis();
+  }
+  
   return xl.convertToG(ACCEL_MAX_SCALE,x);
 }

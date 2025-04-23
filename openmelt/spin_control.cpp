@@ -278,6 +278,129 @@ void spin_one_rotation(void) {
 
   //-initial- assignment of melty parameters
   static struct melty_parameters_t melty_parameters = get_melty_parameters();
+  static bool startup_mode = true;
+  static unsigned long startup_timer = 0;
+  static float manual_startup_rpm = 10; // Start with a very low RPM during startup
+
+  // Force full power mode for the first few seconds regardless of accelerometer readings
+  if (startup_mode) {
+    if (startup_timer == 0) {
+      startup_timer = millis();
+      Serial.println("*** STARTUP MODE ACTIVE - Bypassing accelerometer RPM calculation ***");
+    }
+    
+    // Stay in startup mode for 5 seconds or until manual_startup_rpm exceeds threshold
+    if ((millis() - startup_timer < 5000) && (manual_startup_rpm < MIN_TRANSLATION_RPM)) {
+      // Gradually increase the simulated RPM to smoothly transition into normal mode
+      manual_startup_rpm += 1.0;
+      
+      // Override the rotation interval calculation based on manual RPM
+      melty_parameters.rotation_interval_us = (1.0f / manual_startup_rpm) * 60 * 1000 * 1000;
+      
+      // Set the throttle in the ESCs - use actual RC throttle input
+      float throttle = melty_parameters.throttle_percent;  // Use throttle from RC input
+      int pulse_width1 = 1500 + (throttle * 500);
+      int pulse_width2 = 1500 + (throttle * 500);
+      
+      // Debug output every 500ms
+      static unsigned long last_debug = 0;
+      if (millis() - last_debug > 500) {
+        Serial.print("Startup Mode - Manual RPM: ");
+        Serial.print(manual_startup_rpm);
+        Serial.print(", Using RC throttle: ");
+        Serial.print(throttle * 100);
+        Serial.print("%, PWM: ");
+        Serial.print(pulse_width1);
+        Serial.println("μs");
+        last_debug = millis();
+      }
+      
+      // Directly set the PWM values instead of using motor_X_on
+      if (THROTTLE_TYPE == SERVO_PWM_THROTTLE) {
+        // Update PWM tracking values for diagnostics and send signals
+        set_servo_pwm(MOTOR_PIN1, pulse_width1);
+        set_servo_pwm(MOTOR_PIN2, pulse_width2);
+      } else {
+        // For other motor types
+        motor_1_on(throttle);
+        motor_2_on(throttle);
+      }
+      
+      // Small delay to avoid overwhelming the system during spin-up
+      delay(5);
+      
+      // Update heading LED
+      update_heading_led(melty_parameters, 0);
+      return;
+    } else {
+      // Exit startup mode
+      startup_mode = false;
+      Serial.println("*** EXITING STARTUP MODE - Normal operation begins ***");
+    }
+  }
+
+  // Calculate current RPM based on accelerometer but with a minimum threshold
+  // to prevent false readings from gravity/noise
+  float raw_accel_g = get_accel_force_g() - accel_zero_g_offset;
+  float current_rpm = 0;
+  
+  // Only calculate RPM if acceleration is above a minimum threshold
+  // to avoid interpreting gravity or noise as rotation
+  if (fabs(raw_accel_g) > 0.5) {
+    if (melty_parameters.rotation_interval_us > 0) {
+      current_rpm = (1.0f / (melty_parameters.rotation_interval_us / 1000000.0f)) * 60.0f;
+    }
+  }
+  
+  // Debug output every 500ms
+  static unsigned long last_rpm_debug = 0;
+  if (millis() - last_rpm_debug > 500) {
+    Serial.print("Current RPM: ");
+    Serial.print(current_rpm);
+    Serial.print(" (Min translation RPM: ");
+    Serial.print(MIN_TRANSLATION_RPM);
+    Serial.print("), Raw accel: ");
+    Serial.print(raw_accel_g);
+    Serial.println("g");
+    last_rpm_debug = millis();
+  }
+  
+  // Force full power mode if RPM is below threshold
+  bool force_full_power = (current_rpm < MIN_TRANSLATION_RPM);
+  
+  if (force_full_power) {
+    // During spin-up, directly set ESC signals using the RC throttle input
+    float throttle = melty_parameters.throttle_percent;  // Use actual throttle from RC input
+    
+    if (THROTTLE_TYPE == SERVO_PWM_THROTTLE) {
+      int pulse_width = 1500 + (throttle * 500);
+      
+      // Debug output
+      static unsigned long last_force_debug = 0;
+      if (millis() - last_force_debug > 500) {
+        Serial.print("Spin-up mode - Using RC throttle: ");
+        Serial.print(throttle * 100);
+        Serial.print("%, PWM: ");
+        Serial.println(pulse_width);
+        last_force_debug = millis();
+      }
+      
+      // Update PWM tracking values for diagnostics and send signals
+      set_servo_pwm(MOTOR_PIN1, pulse_width);
+      set_servo_pwm(MOTOR_PIN2, pulse_width);
+    } else {
+      // For other motor types
+      motor_1_on(throttle);
+      motor_2_on(throttle);
+    }
+    
+    // Small delay to avoid overwhelming the system during spin-up
+    delay(5);
+    
+    // Update heading LED
+    update_heading_led(melty_parameters, 0);
+    return;
+  }
 
   //capture initial time stamp before rotation start (time performing accel sampling / floating point math is included)
   unsigned long start_time = micros();

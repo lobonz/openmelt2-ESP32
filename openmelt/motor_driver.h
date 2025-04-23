@@ -1,10 +1,27 @@
 //intitialize motors
 void init_motors();
 
+// Flag to enable direct ESC control (bypasses translational drift)
+extern bool direct_esc_control;
+
 // Function to arm or calibrate ESCs
 // For normal operation, just call init_motors()
 // For calibration, set calibrate=true
 void arm_calibrate_escs(bool calibrate = false);
+
+// Functions to get current PWM values
+int get_motor1_pulse_width();
+int get_motor2_pulse_width();
+
+// Function to update PWM values for diagnostics
+void update_pwm_values(int motor1_pwm, int motor2_pwm);
+
+// Function to directly set servo PWM values
+void set_servo_pwm(int motor_pin, int pulse_width);
+
+// Direct ESC control functions (for testing)
+void set_direct_esc_control(bool enable);
+void set_esc_throttle(float throttle_percent);
 
 //turn motor_X_on (throttle_percent only used for dynamic PWM throttle mode)
 void motor_1_on(float throttle_percent);

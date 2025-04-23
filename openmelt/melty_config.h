@@ -21,7 +21,7 @@
 #define DEFAULT_ACCEL_MOUNT_RADIUS_CM 10.0         //Radius of accelerometer from center of robot
 #define DEFAULT_LED_OFFSET_PERCENT 7              //Adjust to make heading LED line up with direction robot travels 0-99 (increasing moves beacon clockwise)
                                                    
-#define DEFAULT_ACCEL_ZERO_G_OFFSET 0.0f          //Value accelerometer returns with robot at rest (in G) - adjusts for any offset
+#define DEFAULT_ACCEL_ZERO_G_OFFSET 1.0f          //Value accelerometer returns with robot at rest (in G) - adjusts for any offset
                                                   //H3LIS331 claims +/-1g DC offset - typical - but +/-2.5 has been observed at +/-400g setting (enough to cause tracking error)
                                                   //Just enterring and exiting config mode will automatically set this value / save to EEPROM (based on current accel reading reflecting 0g)
                                                   //For small-radius bots - try changing to H3LIS331 to +/-200g range for improved accuracy (accel_handler.h)

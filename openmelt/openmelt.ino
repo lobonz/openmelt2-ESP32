@@ -12,8 +12,11 @@
 #include <WiFi.h>
 #include <WebServer.h>
 
-// Define to enable web server without requiring RC signal
-#define ENABLE_WEBSERVER_STANDALONE
+// Define to enable web server diagnostics (but still allow normal operation)
+#define ENABLE_WEBSERVER
+
+// Legacy standalone mode (disables normal operation, only for diagnostics)
+// #define ENABLE_WEBSERVER_STANDALONE
 
 #ifdef ENABLE_WATCHDOG
 #include <Adafruit_SleepyDog.h>
@@ -151,6 +154,12 @@ static void echo_diagnostics() {
   diagnosticData += "  RC L/R: " + String(rc_get_leftright());
   diagnosticData += "  RC F/B: " + String(rc_get_forback());
 
+  // Add motor PWM values if using servo PWM throttle
+  if (THROTTLE_TYPE == SERVO_PWM_THROTTLE) {
+    diagnosticData += "  Motor1 PWM: " + String(get_motor1_pulse_width()) + "us";
+    diagnosticData += "  Motor2 PWM: " + String(get_motor2_pulse_width()) + "us";
+  }
+
 #ifdef BATTERY_ALERT_ENABLED
   diagnosticData += "  Battery Voltage: " + String(get_battery_voltage());
 #endif 
@@ -245,6 +254,48 @@ void loop() {
     echo_diagnostics();
   }
 
+  // Special direct ESC control mode
+  // To enter: Hold the RC stick in top-left position for 2 seconds
+  // To exit: Move the stick back to neutral or bottom position
+  static bool checked_direct_esc_mode = false;
+  static unsigned long direct_mode_check_start = 0;
+  
+  if (rc_get_throttle_percent() > 90 && rc_get_leftright() < -200) {
+    if (!checked_direct_esc_mode) {
+      direct_mode_check_start = millis();
+      checked_direct_esc_mode = true;
+    } else if (millis() - direct_mode_check_start > 2000) {
+      // Enable direct ESC control after holding position for 2 seconds
+      set_direct_esc_control(true);
+    }
+  } else {
+    checked_direct_esc_mode = false;
+  }
+  
+  // If direct ESC control is enabled, use throttle to directly control ESCs
+  if (direct_esc_control) {
+    // Exit direct ESC control if throttle goes below 10% for 1 second
+    static unsigned long low_throttle_start = 0;
+    if (rc_get_throttle_percent() < 10) {
+      if (low_throttle_start == 0) {
+        low_throttle_start = millis();
+      } else if (millis() - low_throttle_start > 1000) {
+        // Exit direct ESC control mode
+        set_direct_esc_control(false);
+        low_throttle_start = 0;
+        return;
+      }
+    } else {
+      low_throttle_start = 0;
+    }
+    
+    float throttle = rc_get_throttle_percent() / 100.0f;
+    set_esc_throttle(throttle);
+    echo_diagnostics();
+    delay(20); // Small delay to avoid flooding
+    return;  // Skip normal loop processing
+  }
+
   //if RC is good - and throtte is above 0 - spin a single rotation
   if (rc_get_throttle_percent() > 0) {
     //this is where all the motor control happens!  (see spin_control.cpp)
@@ -252,13 +303,79 @@ void loop() {
   } else {    
     handle_bot_idle();
   }
+  
+  // Service web server if enabled
+  #ifdef ENABLE_WEBSERVER
+  server.handleClient();
+  #endif
+  
 #else
   // In standalone web server mode, just handle idle state and echo diagnostics
-  motors_off();
+  
+  // Add direct throttle control in standalone mode for ESC testing
+  static bool standalone_motor_test_enabled = false;
+  
+  // Enable motor test if throttle is above 50% for 2 seconds
+  static unsigned long high_throttle_start = 0;
+  if (rc_get_throttle_percent() > 50) {
+    if (high_throttle_start == 0) {
+      high_throttle_start = millis();
+    } else if (millis() - high_throttle_start > 2000 && !standalone_motor_test_enabled) {
+      standalone_motor_test_enabled = true;
+      Serial.println("*** STANDALONE MOTOR TEST ENABLED ***");
+      Serial.println("Move throttle to control ESCs directly");
+    }
+  } else {
+    high_throttle_start = 0;
+    
+    // Disable motor test if throttle goes below 10% for 1 second
+    static unsigned long low_throttle_start = 0;
+    if (rc_get_throttle_percent() < 10 && standalone_motor_test_enabled) {
+      if (low_throttle_start == 0) {
+        low_throttle_start = millis();
+      } else if (millis() - low_throttle_start > 1000) {
+        standalone_motor_test_enabled = false;
+        Serial.println("*** STANDALONE MOTOR TEST DISABLED ***");
+        motors_off();  // Turn off motors when exiting test mode
+        low_throttle_start = 0;
+      }
+    } else {
+      low_throttle_start = 0;
+    }
+  }
+  
+  // Direct motor control if enabled
+  if (standalone_motor_test_enabled) {
+    float throttle = rc_get_throttle_percent() / 100.0f;
+    int pulse_width = 1500 + (throttle * 500);
+    
+    // Direct motor control in standalone mode
+    if (THROTTLE_TYPE == SERVO_PWM_THROTTLE) {
+      set_servo_pwm(MOTOR_PIN1, pulse_width);
+      set_servo_pwm(MOTOR_PIN2, pulse_width);
+      
+      // Debug output every 500ms
+      static unsigned long last_motor_debug = 0;
+      if (millis() - last_motor_debug > 500) {
+        Serial.print("Direct ESC control - Throttle: ");
+        Serial.print(throttle * 100);
+        Serial.print("%, PWM: ");
+        Serial.println(pulse_width);
+        last_motor_debug = millis();
+      }
+    }
+  } else {
+    // Default behavior when motor test not enabled
+    motors_off();
+  }
+  
   heading_led_on(0); delay(30);
   heading_led_off(); delay(120);
   echo_diagnostics();
-  delay(250); // Slow down the diagnostics output a bit
+  delay(50); // Shorter delay for more responsive control
+  
+  // Always service web server in standalone mode
+  server.handleClient();
 #endif
 
 }

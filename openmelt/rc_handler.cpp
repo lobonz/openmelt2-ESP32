@@ -100,11 +100,58 @@ int rc_get_throttle_percent() {
   unsigned long pulse_length = throttle_rc_channel.pulse_length;
   unlock_rc_data();
 
+  // Debug output every 1000ms
+  static unsigned long last_debug = 0;
+  if (millis() - last_debug > 1000) {
+    Serial.print("RC signal - Raw pulse: ");
+    Serial.print(pulse_length);
+    Serial.print("μs, Thresholds - Idle: ");
+    Serial.print(IDLE_THROTTLE_PULSE_LENGTH);
+    Serial.print("μs, Full: ");
+    Serial.print(FULL_THROTTLE_PULSE_LENGTH);
+    Serial.println("μs");
+    last_debug = millis();
+  }
+
   if (pulse_length >= FULL_THROTTLE_PULSE_LENGTH) return 100;
+  
+  // For bidirectional transmitters sending ~1500μs at minimum stick position
+  // Check if we're in the neutral/minimum range (1450-1550μs)
+  if (pulse_length >= 1450 && pulse_length <= 1550) return 0;
+  
+  // For standard transmitters with true minimum (below IDLE_THROTTLE_PULSE_LENGTH)
   if (pulse_length <= IDLE_THROTTLE_PULSE_LENGTH) return 0;
 
+  // If signal is in the middle range, map it 0-100%
+  // For signals above neutral (1550μs) but below full throttle
+  if (pulse_length > 1550) {
+    long throttle_percent = (pulse_length - 1550) * 100;
+    throttle_percent = throttle_percent / (FULL_THROTTLE_PULSE_LENGTH - 1550);
+    
+    // Make sure we cap at 100% (in case calculation exceeds 100%)
+    if (throttle_percent > 100) throttle_percent = 100;
+    
+    // Debug the throttle calculation for values above 1550μs
+    static unsigned long last_calc_debug = 0;
+    if (millis() - last_calc_debug > 2000) {
+      Serial.print("Throttle calculation: (");
+      Serial.print(pulse_length);
+      Serial.print(" - 1550) * 100 / (");
+      Serial.print(FULL_THROTTLE_PULSE_LENGTH);
+      Serial.print(" - 1550) = ");
+      Serial.print(throttle_percent);
+      Serial.println("%");
+      last_calc_debug = millis();
+    }
+    
+    return (int)throttle_percent;
+  }
+  
+  // For traditional RC transmitters with signals between idle and full
+  // This branch should rarely be hit with bidirectional controllers
   long throttle_percent = (pulse_length - IDLE_THROTTLE_PULSE_LENGTH) * 100;
   throttle_percent = throttle_percent / (FULL_THROTTLE_PULSE_LENGTH - IDLE_THROTTLE_PULSE_LENGTH);
+  if (throttle_percent > 100) throttle_percent = 100;
   return (int)throttle_percent;
 }
 
