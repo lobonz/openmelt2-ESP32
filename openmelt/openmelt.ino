@@ -8,10 +8,23 @@
 #include "config_storage.h"
 #include "led_driver.h"
 #include "battery_monitor.h"
+#include "web_server.h"
+#include <WiFi.h>
+#include <WebServer.h>
+
+// Define to enable web server without requiring RC signal
+#define ENABLE_WEBSERVER_STANDALONE
 
 #ifdef ENABLE_WATCHDOG
 #include <Adafruit_SleepyDog.h>
 #endif
+
+// WiFi credentials for the access point
+const char* ssid = "Hammertime_AP";
+const char* password = "hammertime123";
+
+// Web server on port 80
+WebServer server(80);
 
 void service_watchdog() {
 #ifdef ENABLE_WATCHDOG
@@ -38,6 +51,8 @@ static void wait_for_rc_good_and_zero_throttle() {
 void setup() {
   
   Serial.begin(115200);
+  delay(1000);
+  Serial.println("\n\n*** OpenMelt starting up... ***");
 
   //get motor drivers setup (and off!) first thing
   init_motors();
@@ -45,16 +60,69 @@ void setup() {
 
 #ifdef ENABLE_WATCHDOG
   //returns actual watchdog timeout MS
-  int watchdog_ms = Watchdog.enable(WATCH_DOG_TIMEOUT_MS);
+  Serial.println("Enabling watchdog with increased timeout");
+  // Use a longer timeout for initial setup
+  int watchdog_ms = Watchdog.enable(5000); // Increased from 2000ms
+  Serial.print("Watchdog timeout set to: ");
+  Serial.print(watchdog_ms);
+  Serial.println(" ms");
 #endif
 
   init_rc();
+  service_watchdog(); // Reset watchdog
+  
   init_accel();   //accelerometer uses i2c - which can fail blocking (so only initializing it -after- the watchdog is running)
+  service_watchdog(); // Reset watchdog
   
 //load settings on boot
 #ifdef ENABLE_EEPROM_STORAGE  
   load_melty_config_settings();
+  service_watchdog(); // Reset watchdog
 #endif
+
+  // Setup WiFi AP BEFORE RC checks so web server works even without RC controller
+  Serial.println("*** Setting up WiFi Access Point... ***");
+  
+  // Complete WiFi reset
+  WiFi.disconnect(true);
+  service_watchdog(); // Reset watchdog
+  
+  WiFi.softAPdisconnect(true);
+  service_watchdog(); // Reset watchdog
+  
+  delay(500);
+  service_watchdog(); // Reset watchdog
+  
+  // Set WiFi mode explicitly
+  Serial.println("Setting WiFi mode to AP");
+  WiFi.mode(WIFI_AP);
+  service_watchdog(); // Reset watchdog
+  
+  delay(500);
+  service_watchdog(); // Reset watchdog
+  
+  // Create the access point
+  Serial.print("Creating access point with SSID: ");
+  Serial.println(ssid);
+  bool apStarted = WiFi.softAP(ssid, password);
+  service_watchdog(); // Reset watchdog
+  
+  if (apStarted) {
+    Serial.println("*** Access point created successfully ***");
+    IPAddress IP = WiFi.softAPIP();
+    Serial.print("AP IP address: ");
+    Serial.println(IP);
+  } else {
+    Serial.println("*** Failed to create access point! ***");
+  }
+  service_watchdog(); // Reset watchdog
+  
+  // Initialize web server
+  Serial.println("Starting web server task...");
+  init_web_server();
+  service_watchdog(); // Reset watchdog
+  
+  Serial.println("*** Setup complete! ***");
 
 //if JUST_DO_DIAGNOSTIC_LOOP - then we just loop and display debug info via USB (good for testing)
 #ifdef JUST_DO_DIAGNOSTIC_LOOP
@@ -65,34 +133,39 @@ void setup() {
   }
 #endif
 
-#ifdef VERIFY_RC_THROTTLE_ZERO_AT_BOOT 
+// Only check for RC signal if we're not running the web server standalone
+#if defined(VERIFY_RC_THROTTLE_ZERO_AT_BOOT) && !defined(ENABLE_WEBSERVER_STANDALONE)
   wait_for_rc_good_and_zero_throttle();     //Wait for good RC signal at zero throttle
   delay(MAX_MS_BETWEEN_RC_UPDATES + 1);     //Wait for first RC signal to have expired
   wait_for_rc_good_and_zero_throttle();     //Verify RC signal is still good / zero throttle
 #endif
-
 }
 
 //dumps out diagnostics info
 static void echo_diagnostics() {
-
-  Serial.print("Raw Accel G: "); Serial.print(get_accel_force_g());
-  Serial.print("  RC Health: "); Serial.print(rc_signal_is_healthy());
-  Serial.print("  RC Throttle: "); Serial.print(rc_get_throttle_percent());
-  Serial.print("  RC L/R: "); Serial.print(rc_get_leftright());
-  Serial.print("  RC F/B: "); Serial.print(rc_get_forback());
+  String diagnosticData = "";
+  
+  diagnosticData += "Raw Accel G: " + String(get_accel_force_g());
+  diagnosticData += "  RC Health: " + String(rc_signal_is_healthy());
+  diagnosticData += "  RC Throttle: " + String(rc_get_throttle_percent());
+  diagnosticData += "  RC L/R: " + String(rc_get_leftright());
+  diagnosticData += "  RC F/B: " + String(rc_get_forback());
 
 #ifdef BATTERY_ALERT_ENABLED
-  Serial.print("  Battery Voltage: "); Serial.print(get_battery_voltage());
+  diagnosticData += "  Battery Voltage: " + String(get_battery_voltage());
 #endif 
   
 #ifdef ENABLE_EEPROM_STORAGE  
-  Serial.print("  Accel Radius: "); Serial.print(load_accel_mount_radius());
-  Serial.print("  Heading Offset: "); Serial.print(load_heading_led_offset());
-  Serial.print("  Zero G Offset: "); Serial.print(load_accel_zero_g_offset());
+  diagnosticData += "  Accel Radius: " + String(load_accel_mount_radius());
+  diagnosticData += "  Heading Offset: " + String(load_heading_led_offset());
+  diagnosticData += "  Zero G Offset: " + String(load_accel_zero_g_offset());
 #endif  
-  Serial.println("");
+  diagnosticData += "\n";
 
+  Serial.print(diagnosticData);
+  
+  // Update the web server with the latest data
+  update_web_data(diagnosticData);
 }
 
 //Used to flash out max recorded RPM 100's of RPMs
@@ -158,6 +231,7 @@ void loop() {
 
   service_watchdog();             //keep the watchdog happy
 
+#ifndef ENABLE_WEBSERVER_STANDALONE
   //if the rc signal isn't good - assure motors off - and "slow flash" LED
   //this will interrupt a spun-up bot if the signal becomes bad
   while (rc_signal_is_healthy() == false) {
@@ -178,5 +252,13 @@ void loop() {
   } else {    
     handle_bot_idle();
   }
+#else
+  // In standalone web server mode, just handle idle state and echo diagnostics
+  motors_off();
+  heading_led_on(0); delay(30);
+  heading_led_off(); delay(120);
+  echo_diagnostics();
+  delay(250); // Slow down the diagnostics output a bit
+#endif
 
 }
