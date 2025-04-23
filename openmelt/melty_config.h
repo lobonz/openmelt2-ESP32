@@ -87,21 +87,39 @@ enum throttle_modes {
   FIXED_PWM_THROTTLE,   //Motors pins are PWM at PWM_MOTOR_ON, PWM_MOTOR_COAST or PWM_MOTOR_OFF
                         //throttle controlled by portion of each rotation motor is on
 
-  DYNAMIC_PWM_THROTTLE  //Scales PWM throttling between PWM_MOTOR_COAST and PWM_MOTOR_ON
+  DYNAMIC_PWM_THROTTLE,  //Scales PWM throttling between PWM_MOTOR_COAST and PWM_MOTOR_ON
                         //Range of throttle scaled over is determined by DYNAMIC_PWM_THROTTLE_PERCENT_MAX
                         //PWM is locked at PWM_MOTOR_ON for throttle positions higher than DYNAMIC_PWM_THROTTLE_PERCENT_MAX
                         //Robot speed is additionally controlled by portion of each rotation motor is on (unless DYNAMIC_PWM_MOTOR_ON_PORTION is defined)
                         //This mode reduces current levels during spin up at part throttle
+
+  SERVO_PWM_THROTTLE    //Standard RC Servo PWM signal (50Hz, 1000-2000μs pulse width)
+                        //Compatible with standard RC ESCs like BLHeli
 };
-
-#define THROTTLE_TYPE DYNAMIC_PWM_THROTTLE      //<---Throttle type set here!
-
-#define DYNAMIC_PWM_MOTOR_ON_PORTION 0.5f       //if defined (and DYNAMIC_PWM_THROTTLE is set) portion of each rotation motor is on is fixed at this value
-                                                //About 0.5f for best translation (higher for increased RPM)
 
 #define DYNAMIC_PWM_THROTTLE_PERCENT_MAX 1.0f   //Range of RC throttle DYNAMIC_PWM_THROTTLE is applied to 
                                                 //0.5f for 0-50% throttle (full PWM_MOTOR_ON used for >50% throttle)
                                                 //1.0f for 0-100% throttle
+
+#define THROTTLE_TYPE SERVO_PWM_THROTTLE         //<---Using standard RC servo PWM for BLHeli ESCs
+
+//----------ESC SETTINGS----------
+// Standard RC servo PWM signal for bi-directional BLHeli ESCs:
+// - 50Hz frequency (20ms period)
+// - 1000-2000μs pulse width (1-2ms) where:
+//   * 1000μs = -100% throttle (full reverse)
+//   * 1500μs = 0% throttle (neutral/stop)
+//   * 2000μs = +100% throttle (full forward)
+// - For this application we only use 1500-2000μs range (neutral to forward)
+// - 3.3V logic level from M5 Stamp S3 should be sufficient for most modern ESCs
+// - If ESC doesn't respond to 3.3V signal, a level shifter to 5V may be needed
+// 
+// Normal ESC initialization sequence:
+// 1. Power up the ESC with the controller sending a neutral signal (1500μs)
+// 2. ESC should emit initialization tones (usually 1-3 tones)
+// 3. After initialization, the ESC is ready to accept throttle commands
+
+#define DYNAMIC_PWM_MOTOR_ON_PORTION 0.5f       //if defined (and DYNAMIC_PWM_THROTTLE is set) portion of each rotation motor is on is fixed at this value
 
 //----------PWM MOTOR SETTINGS---------- 
 //(only used if a PWM throttle mode is chosen)
