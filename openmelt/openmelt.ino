@@ -16,9 +16,6 @@
 // Define to enable web server diagnostics (but still allow normal operation)
 #define ENABLE_WEBSERVER
 
-// Legacy standalone mode (disables normal operation, only for diagnostics)
-// #define ENABLE_WEBSERVER_STANDALONE
-
 #ifdef ENABLE_WATCHDOG
 #include <Adafruit_SleepyDog.h>
 #endif
@@ -74,7 +71,7 @@ void setup() {
   //returns actual watchdog timeout MS
   debug_print("SYSTEM", "Enabling watchdog with increased timeout");
   // Use a longer timeout for initial setup
-  int watchdog_ms = Watchdog.enable(5000); // Increased from 2000ms
+  int watchdog_ms = Watchdog.enable(WATCH_DOG_TIMEOUT_MS); // Increased from 2000ms
   debug_printf("SYSTEM", "Watchdog timeout set to: %d ms", watchdog_ms);
 #endif
 
@@ -147,12 +144,12 @@ void setup() {
   }
 #endif
 
-// Only check for RC signal if we're not running the web server standalone
-#if defined(VERIFY_RC_THROTTLE_ZERO_AT_BOOT) && !defined(ENABLE_WEBSERVER_STANDALONE)
+#if defined(VERIFY_RC_THROTTLE_ZERO_AT_BOOT)
   wait_for_rc_good_and_zero_throttle();     //Wait for good RC signal at zero throttle
   delay(MAX_MS_BETWEEN_RC_UPDATES + 1);     //Wait for first RC signal to have expired
   wait_for_rc_good_and_zero_throttle();     //Verify RC signal is still good / zero throttle
 #endif
+
 }
 
 //dumps out diagnostics info
@@ -231,7 +228,6 @@ void loop() {
 
   service_watchdog();             //keep the watchdog happy
 
-#ifndef ENABLE_WEBSERVER_STANDALONE
   //if the rc signal isn't good - assure motors off - and "slow flash" LED
   //this will interrupt a spun-up bot if the signal becomes bad
   while (rc_signal_is_healthy() == false) {
@@ -245,58 +241,6 @@ void loop() {
     echo_diagnostics();
   }
 
-  // Special direct ESC control mode
-  // To enter: Hold the RC stick in top-left position for 2 seconds
-  // To exit: Move the stick back to neutral or bottom position
-  static bool checked_direct_esc_mode = false;
-  static unsigned long direct_mode_check_start = 0;
-  
-  if (rc_get_throttle_percent() > 90 && rc_get_leftright() < -200) {
-    if (!checked_direct_esc_mode) {
-      direct_mode_check_start = millis();
-      checked_direct_esc_mode = true;
-    } else if (millis() - direct_mode_check_start > 2000) {
-      // Enable direct ESC control after holding position for 2 seconds
-      set_direct_esc_control(true);
-      debug_print("CONTROL", "Entering direct ESC control mode");
-    }
-  } else {
-    checked_direct_esc_mode = false;
-  }
-  
-  // If direct ESC control is enabled, use throttle to directly control ESCs
-  if (direct_esc_control) {
-    // Exit direct ESC control if throttle goes below 10% for 1 second
-    static unsigned long low_throttle_start = 0;
-    if (rc_get_throttle_percent() < 10) {
-      if (low_throttle_start == 0) {
-        low_throttle_start = millis();
-      } else if (millis() - low_throttle_start > 1000) {
-        // Exit direct ESC control mode
-        set_direct_esc_control(false);
-        debug_print("CONTROL", "Exiting direct ESC control mode");
-        low_throttle_start = 0;
-        return;
-      }
-    } else {
-      low_throttle_start = 0;
-    }
-    
-    float throttle = rc_get_throttle_percent() / 100.0f;
-    set_esc_throttle(throttle);
-    
-    // Only update this debug message occasionally to reduce load
-    static unsigned long last_direct_throttle_debug = 0;
-    if (millis() - last_direct_throttle_debug > 250) {
-      debug_printf("CONTROL", "Direct ESC throttle: %.2f", throttle);
-      last_direct_throttle_debug = millis();
-    }
-    
-    echo_diagnostics();
-    delay(20); // Small delay to avoid flooding
-    return;  // Skip normal loop processing
-  }
-
   //if RC is good - and throtte is above 0 - spin a single rotation
   if (rc_get_throttle_percent() > 0) {
     //this is where all the motor control happens!  (see spin_control.cpp)
@@ -304,73 +248,5 @@ void loop() {
   } else {    
     handle_bot_idle();
   }
-  
-  // Service web server on the main thread
-  // NOTE: This is now avoided as we use a separate task for the web server
-  
-#else
-  // In standalone web server mode, just handle idle state and echo diagnostics
-  
-  // Add direct throttle control in standalone mode for ESC testing
-  static bool standalone_motor_test_enabled = false;
-  
-  // Enable motor test if throttle is above 50% for 2 seconds
-  static unsigned long high_throttle_start = 0;
-  if (rc_get_throttle_percent() > 50) {
-    if (high_throttle_start == 0) {
-      high_throttle_start = millis();
-    } else if (millis() - high_throttle_start > 2000 && !standalone_motor_test_enabled) {
-      standalone_motor_test_enabled = true;
-      debug_print_level(DEBUG_WARNING, "TEST", "STANDALONE MOTOR TEST ENABLED");
-      debug_print("TEST", "Move throttle to control ESCs directly");
-    }
-  } else {
-    high_throttle_start = 0;
-    
-    // Disable motor test if throttle goes below 10% for 1 second
-    static unsigned long low_throttle_start = 0;
-    if (rc_get_throttle_percent() < 10 && standalone_motor_test_enabled) {
-      if (low_throttle_start == 0) {
-        low_throttle_start = millis();
-      } else if (millis() - low_throttle_start > 1000) {
-        standalone_motor_test_enabled = false;
-        debug_print("TEST", "STANDALONE MOTOR TEST DISABLED");
-        motors_off();  // Turn off motors when exiting test mode
-        low_throttle_start = 0;
-      }
-    } else {
-      low_throttle_start = 0;
-    }
-  }
-  
-  // Direct motor control if enabled
-  if (standalone_motor_test_enabled) {
-    float throttle = rc_get_throttle_percent() / 100.0f;
-    int pulse_width = 1500 + (throttle * 500);
-    
-    // Direct motor control in standalone mode
-    if (THROTTLE_TYPE == SERVO_PWM_THROTTLE) {
-      set_servo_pwm(MOTOR_PIN1, pulse_width);
-      set_servo_pwm(MOTOR_PIN2, pulse_width);
-      
-      // Debug output every 500ms
-      static unsigned long last_motor_debug = 0;
-      if (millis() - last_motor_debug > 500) {
-        debug_printf("TEST", "Direct ESC control - Throttle: %.0f%%, PWM: %d", throttle * 100, pulse_width);
-        last_motor_debug = millis();
-      }
-    }
-  } else {
-    // Default behavior when motor test not enabled
-  motors_off();
-  }
-  
-  heading_led_on(0); delay(30);
-  heading_led_off(); delay(120);
-  echo_diagnostics();
-  delay(50); // Shorter delay for more responsive control
-  
-  // No longer calling server.handleClient() here as it's handled in the separate task
-#endif
 
 }
