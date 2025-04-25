@@ -1,4 +1,7 @@
 #include "web_server.h"
+#include "debug_handler.h"
+#include "config_storage.h"
+#include "melty_config.h"
 #include <WiFi.h>
 #include <WebServer.h>
 #include <DNSServer.h>
@@ -6,132 +9,759 @@
 
 // External declarations
 extern WebServer server;
+extern const char* ssid;      // WiFi SSID from openmelt.ino
+extern const char* password;  // WiFi password from openmelt.ino
 // We don't need the watchdog service in this task
 // extern void service_watchdog();
 
-// DNS Server for captive portal
-const byte DNS_PORT = 53;
-DNSServer dnsServer;
+// Configuration
+#define WEB_SERVER_TASK_STACK_SIZE 16384
+#define DNS_PORT 53
+#define UPDATE_INTERVAL_MS 250
 
-// For storing the latest diagnostic data
-String latestData = "";
+// Buffers for data
+char webTelemetryBuffer[1024] = "";
+char webLogBuffer[2048] = "";
 
 // Mutex for protecting access to the data
-portMUX_TYPE dataMux = portMUX_INITIALIZER_UNLOCKED;
+portMUX_TYPE webDataMux = portMUX_INITIALIZER_UNLOCKED;
 
-// HTML template for the web page
-const char index_html[] PROGMEM = R"rawliteral(
-<!DOCTYPE HTML>
+// Web and DNS servers
+WebServer webServer(80);
+DNSServer dnsServer;
+
+// Flag indicating if the server is running
+volatile bool server_running = false;
+
+// HTML template with JavaScript for a nice UI
+const char* htmlTemplate = R"(
+<!DOCTYPE html>
 <html>
 <head>
-  <title>Hammertime Diagnostics</title>
+  <title>OpenMelt Telemetry</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="refresh" content="1"> <!-- Auto refresh every 1 second -->
   <style>
-    body { font-family: Arial; margin: 20px; }
-    .card { background-color: #f8f9fa; padding: 20px; margin-bottom: 20px; border-radius: 10px; }
-    h2 { color: #343a40; }
-    .data { font-family: monospace; white-space: pre-wrap; }
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: #f0f0f0;
+      color: #333;
+    }
+    h1 {
+      color: #222;
+      margin-bottom: 20px;
+    }
+    #hud {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .metric {
+      background-color: #fff;
+      border-radius: 8px;
+      padding: 15px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+    .metric-title {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 5px;
+    }
+    .metric-value {
+      font-size: 24px;
+      font-weight: bold;
+      color: #0066cc;
+    }
+    .metric-unit {
+      font-size: 14px;
+      color: #666;
+    }
+    #logs {
+      background-color: #fff;
+      border-radius: 8px;
+      padding: 15px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      height: 300px;
+      overflow-y: auto;
+      font-family: monospace;
+      white-space: pre-wrap;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    .warning {
+      color: #ff9900;
+    }
+    .error {
+      color: #cc0000;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .button {
+      background-color: #0066cc;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .button:hover {
+      background-color: #0055aa;
+    }
+    .metric-container {
+      display: flex;
+      justify-content: space-around;
+      margin-top: 10px;
+    }
+    .metric-child {
+      text-align: center;
+      flex: 1;
+      padding: 0 5px;
+    }
+    .metric-child[id="child-maxRpm"] .metric-value,
+    .metric-child[id="child-maxGForce"] .metric-value {
+      color: #e74c3c; /* Red color for max values */
+    }
+    .max-value {
+      color: #e74c3c; /* Red color for max values */
+    }
+    .metric-value-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 24px;
+      font-weight: bold;
+    }
+    .metric-separator {
+      margin: 0 2px;
+      color: #666;
+    }
+    .metric-subtitle {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 2px;
+    }
+    .reset-button {
+      background-color: #ff6b6b;
+      margin-left: 10px;
+    }
+    /* Tab styles */
+    .tabs {
+      display: flex;
+      margin-bottom: 20px;
+      border-bottom: 1px solid #ddd;
+    }
+    .tab {
+      padding: 10px 20px;
+      cursor: pointer;
+      background-color: #f0f0f0;
+      border: 1px solid #ddd;
+      border-bottom: none;
+      border-radius: 4px 4px 0 0;
+      margin-right: 5px;
+    }
+    .tab.active {
+      background-color: #fff;
+      border-bottom: 1px solid #fff;
+      margin-bottom: -1px;
+      font-weight: bold;
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
+    /* EEPROM table styles */
+    .eeprom-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+      background-color: #fff;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .eeprom-table th, .eeprom-table td {
+      border: 1px solid #ddd;
+      padding: 12px 15px;
+      text-align: left;
+    }
+    .eeprom-table th {
+      background-color: #f8f9fa;
+      color: #333;
+    }
+    .eeprom-table tr:nth-child(even) {
+      background-color: #f2f2f2;
+    }
   </style>
 </head>
 <body>
-  <h2>Hammertime Diagnostics</h2>
-  <div class="card">
-    <div class="data" id="diagnostics">%DIAGNOSTICS%</div>
+  <header>
+    <h1>OpenMelt Telemetry</h1>
+    <div>
+      <button class="button" id="clearLogs">Clear Logs</button>
+      <button class="button reset-button" id="resetMax">Reset Max Values</button>
+    </div>
+  </header>
+  
+  <div class="tabs">
+    <div class="tab active" data-tab="telemetry">Telemetry</div>
+    <div class="tab" data-tab="eeprom">EEPROM Settings</div>
   </div>
+  
+  <div id="telemetry-tab" class="tab-content active">
+    <div id="hud"></div>
+    <h2>System Logs</h2>
+    <div id="logs"></div>
+  </div>
+  
+  <div id="eeprom-tab" class="tab-content">
+    <h2>EEPROM Settings</h2>
+    <table class="eeprom-table">
+      <thead>
+        <tr>
+          <th>Setting</th>
+          <th>Current Value</th>
+          <th>Default Value</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody id="eeprom-settings">
+        <tr>
+          <td colspan="4">Loading EEPROM settings...</td>
+        </tr>
+      </tbody>
+    </table>
+    <button class="button" id="refreshEEPROM">Refresh EEPROM</button>
+  </div>
+  
+  <script>
+    // Create HUD elements for the key metrics
+    const hudMetrics = [
+      { id: 'rpmContainer', title: 'RPM', isContainer: true, children: [
+        { id: 'rpm', title: 'Current', unit: 'rpm' },
+        { id: 'maxRpm', title: 'Max', unit: 'rpm' }
+      ]},
+      { id: 'gForceContainer', title: 'G-Force', isContainer: true, children: [
+        { id: 'gForce', title: 'Current', unit: 'g' },
+        { id: 'maxGForce', title: 'Max', unit: 'g' },
+        { id: 'accelUsed', title: 'Used', unit: 'g' }
+      ]},
+      { id: 'throttleContainer', title: 'Motor Throttle', isContainer: true, children: [
+        { id: 'motor1Throttle', title: 'Motor 1', unit: '%', hasMax: true, maxId: 'maxMotor1Throttle' },
+        { id: 'motor2Throttle', title: 'Motor 2', unit: '%', hasMax: true, maxId: 'maxMotor2Throttle' }
+      ]}
+    ];
+    
+    const hudElement = document.getElementById('hud');
+    
+    // Create metric elements
+    hudMetrics.forEach(metric => {
+      const metricElement = document.createElement('div');
+      metricElement.className = 'metric';
+      
+      if (metric.isContainer) {
+        // Create container with title
+        metricElement.innerHTML = `<div class="metric-title">${metric.title}</div>`;
+        
+        // Create container for child metrics
+        const childContainer = document.createElement('div');
+        childContainer.className = 'metric-container';
+        
+        // Add child metrics
+        metric.children.forEach(child => {
+          const childElement = document.createElement('div');
+          childElement.className = 'metric-child';
+          childElement.id = `child-${child.id}`;
+          
+          if (child.hasMax) {
+            childElement.innerHTML = `
+              <div class="metric-subtitle">${child.title}</div>
+              <div class="metric-value-container">
+                <span id="${child.id}" class="metric-value">0</span>
+                <span class="metric-separator">/</span>
+                <span id="${child.maxId}" class="metric-value max-value">0</span>
+              </div>
+              <div class="metric-unit">${child.unit}</div>
+            `;
+          } else {
+            childElement.innerHTML = `
+              <div class="metric-subtitle">${child.title}</div>
+              <div class="metric-value" id="${child.id}">0</div>
+              <div class="metric-unit">${child.unit}</div>
+            `;
+          }
+          
+          childContainer.appendChild(childElement);
+        });
+        
+        metricElement.appendChild(childContainer);
+      } else {
+        // Standard metric
+        metricElement.innerHTML = `
+          <div class="metric-title">${metric.title}</div>
+          <div class="metric-value" id="${metric.id}">0</div>
+          <div class="metric-unit">${metric.unit}</div>
+        `;
+      }
+      
+      hudElement.appendChild(metricElement);
+    });
+    
+    // Track max values
+    let maxGForce = 0;
+    let maxRpm = 0;
+    let maxMotor1Throttle = 0;
+    let maxMotor2Throttle = 0;
+    
+    // Logs container
+    const logsElement = document.getElementById('logs');
+    
+    // Function to update the HUD with telemetry data
+    function updateHUD(data) {
+      // Update regular metrics
+      Object.keys(data).forEach(key => {
+        const element = document.getElementById(key);
+        if (element && data[key] !== undefined) {
+          element.textContent = data[key];
+          
+          // Track max values
+          if (key === 'gForce' && parseFloat(data[key]) > maxGForce) {
+            maxGForce = parseFloat(data[key]);
+            document.getElementById('maxGForce').textContent = maxGForce.toFixed(2);
+          }
+          
+          if (key === 'rpm' && parseInt(data[key]) > maxRpm) {
+            maxRpm = parseInt(data[key]);
+            document.getElementById('maxRpm').textContent = maxRpm;
+          }
+          
+          if (key === 'motor1Throttle' && parseInt(data[key]) > maxMotor1Throttle) {
+            maxMotor1Throttle = parseInt(data[key]);
+            document.getElementById('maxMotor1Throttle').textContent = maxMotor1Throttle;
+          }
+          
+          if (key === 'motor2Throttle' && parseInt(data[key]) > maxMotor2Throttle) {
+            maxMotor2Throttle = parseInt(data[key]);
+            document.getElementById('maxMotor2Throttle').textContent = maxMotor2Throttle;
+          }
+        }
+      });
+    }
+    
+    // Function to update the logs
+    function updateLogs(logs) {
+      logsElement.innerHTML = logs
+        .replace(/⚠️/g, '<span class="warning">⚠️</span>')
+        .replace(/🛑/g, '<span class="error">🛑</span>');
+      
+      // Auto-scroll to bottom
+      logsElement.scrollTop = logsElement.scrollHeight;
+    }
+    
+    // Function to update EEPROM settings table
+    function updateEEPROMSettings(data) {
+      const tableBody = document.getElementById('eeprom-settings');
+      tableBody.innerHTML = '';
+      
+      // Add each setting to the table
+      Object.keys(data).forEach(key => {
+        const row = document.createElement('tr');
+        const setting = data[key];
+        
+        row.innerHTML = `
+          <td>${setting.name}</td>
+          <td>${setting.value}${setting.unit || ''}</td>
+          <td>${setting.default}${setting.unit || ''}</td>
+          <td>${setting.description}</td>
+        `;
+        
+        tableBody.appendChild(row);
+      });
+    }
+    
+    // Function to fetch data from the server
+    function fetchData() {
+      // Fetch telemetry data
+      fetch('/telemetry')
+        .then(response => response.json())
+        .then(data => {
+          updateHUD(data);
+        })
+        .catch(error => {
+          console.error('Error fetching telemetry:', error);
+        });
+      
+      // Fetch logs
+      fetch('/logs')
+        .then(response => response.text())
+        .then(logs => {
+          updateLogs(logs);
+        })
+        .catch(error => {
+          console.error('Error fetching logs:', error);
+        });
+    }
+    
+    // Function to fetch EEPROM settings
+    function fetchEEPROMSettings() {
+      fetch('/eeprom')
+        .then(response => response.json())
+        .then(data => {
+          updateEEPROMSettings(data);
+        })
+        .catch(error => {
+          console.error('Error fetching EEPROM settings:', error);
+        });
+    }
+    
+    // Tab functionality
+    const tabs = document.querySelectorAll('.tab');
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        // Remove active class from all tabs and content
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        
+        // Add active class to clicked tab
+        tab.classList.add('active');
+        
+        // Show corresponding content
+        const tabName = tab.getAttribute('data-tab');
+        document.getElementById(`${tabName}-tab`).classList.add('active');
+        
+        // Load EEPROM data when switching to EEPROM tab
+        if (tabName === 'eeprom') {
+          fetchEEPROMSettings();
+        }
+      });
+    });
+    
+    // Clear logs button
+    document.getElementById('clearLogs').addEventListener('click', () => {
+      fetch('/clear', { method: 'POST' })
+        .then(() => {
+          logsElement.innerHTML = '';
+        })
+        .catch(error => {
+          console.error('Error clearing logs:', error);
+        });
+    });
+    
+    // Reset max values button
+    document.getElementById('resetMax').addEventListener('click', () => {
+      maxGForce = 0;
+      maxRpm = 0;
+      maxMotor1Throttle = 0;
+      maxMotor2Throttle = 0;
+      document.getElementById('maxGForce').textContent = '0';
+      document.getElementById('maxRpm').textContent = '0';
+      document.getElementById('maxMotor1Throttle').textContent = '0';
+      document.getElementById('maxMotor2Throttle').textContent = '0';
+    });
+    
+    // Refresh EEPROM button
+    document.getElementById('refreshEEPROM').addEventListener('click', fetchEEPROMSettings);
+    
+    // Initial fetch
+    fetchData();
+    
+    // Set up interval to fetch data periodically
+    setInterval(fetchData, 500);
+  </script>
 </body>
 </html>
-)rawliteral";
+)";
 
-// Update the data with thread safety
-void update_web_data(const String &data) {
-  portENTER_CRITICAL(&dataMux);
-  latestData = data;
-  portEXIT_CRITICAL(&dataMux);
-}
-
-// Handle root path
+// Handler function for root path
 void handleRoot() {
-  // No need to reset watchdog here
-  String html = index_html;
-  portENTER_CRITICAL(&dataMux);
-  html.replace("%DIAGNOSTICS%", latestData);
-  portEXIT_CRITICAL(&dataMux);
-  server.send(200, "text/html", html);
-  // No need to reset watchdog here
+  webServer.send(200, "text/html", htmlTemplate);
 }
 
-// Handle captive portal requests
-void handleCaptivePortal() {
-  // Redirect to root
-  server.sendHeader("Location", "/", true);
-  server.send(302, "text/plain", "");
+// Handler for telemetry data as JSON
+void handleTelemetry() {
+  String telemetryData;
+  
+  // Safely get telemetry data with mutex protection
+  portENTER_CRITICAL(&webDataMux);
+  telemetryData = String(webTelemetryBuffer);
+  portEXIT_CRITICAL(&webDataMux);
+  
+  // Parse telemetry data into JSON and send response
+  String jsonData = parseTelemetryToJSON(telemetryData);
+  webServer.send(200, "application/json", jsonData);
 }
 
-// Special response for Apple devices
-void handleApple() {
-  server.send(200, "text/html", "Success");
+// Handler for log data as plain text
+void handleLogs() {
+  String logData;
+  
+  // Safely get log data with mutex protection
+  portENTER_CRITICAL(&webDataMux);
+  logData = String(webLogBuffer);
+  portEXIT_CRITICAL(&webDataMux);
+  
+  webServer.send(200, "text/plain", logData);
 }
 
-// Task that runs on the second core
-void web_server_task(void *pvParameters) {
-  Serial.println("*** Web server task starting... ***");
-  // No need to reset watchdog here
-  
-  // WiFi AP is already set up in the main setup function
-  // Just use the existing setup
-  
-  // Setup captive portal DNS server
-  dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
-  Serial.println("*** DNS Server started for captive portal ***");
-  
-  // Route for root / web page
-  server.on("/", handleRoot);
-  
-  // Special routes for iOS/macOS captive portal detection
-  server.on("/hotspot-detect.html", handleRoot);
-  server.on("/library/test/success.html", handleApple);
-  server.on("/generate_204", handleRoot);  // Android captive portal detection
-  server.on("/connecttest.txt", handleRoot); // Windows captive portal detection
-  
-  // Catch-all handler for captive portal
-  server.onNotFound(handleCaptivePortal);
+// Handler for clearing logs
+void handleClear() {
+  clear_debug_data();
+  webServer.send(200, "text/plain", "Logs cleared");
+}
 
-  // Start server
-  server.begin();
-  Serial.println("*** HTTP server started ***");
-  // No need to reset watchdog here
+// Handler for EEPROM settings as JSON
+void handleEEPROM() {
+  String jsonResult = "{";
+  
+  // Include LED offset
+  int ledOffset = load_heading_led_offset();
+  jsonResult += "\"ledOffset\":{";
+  jsonResult += "\"name\":\"LED Heading Offset\",";
+  jsonResult += "\"value\":" + String(ledOffset) + ",";
+  jsonResult += "\"default\":" + String(DEFAULT_LED_OFFSET_PERCENT) + ",";
+  jsonResult += "\"unit\":\"%\",";
+  jsonResult += "\"description\":\"Position of heading LED (percentage of rotation)\"";
+  jsonResult += "},";
+  
+  // Include accelerometer mount radius
+  float accelRadius = load_accel_mount_radius();
+  jsonResult += "\"accelRadius\":{";
+  jsonResult += "\"name\":\"Accelerometer Mount Radius\",";
+  jsonResult += "\"value\":" + String(accelRadius, 2) + ",";
+  jsonResult += "\"default\":" + String(DEFAULT_ACCEL_MOUNT_RADIUS_CM, 2) + ",";
+  jsonResult += "\"unit\":\"cm\",";
+  jsonResult += "\"description\":\"Distance from center of rotation to accelerometer\"";
+  jsonResult += "},";
+  
+  // Include zero G offset
+  float zeroGOffset = load_accel_zero_g_offset();
+  jsonResult += "\"zeroGOffset\":{";
+  jsonResult += "\"name\":\"Zero G Offset\",";
+  jsonResult += "\"value\":" + String(zeroGOffset, 3) + ",";
+  jsonResult += "\"default\":" + String(DEFAULT_ACCEL_ZERO_G_OFFSET, 3) + ",";
+  jsonResult += "\"unit\":\"g\",";
+  jsonResult += "\"description\":\"Calibrated zero-point for accelerometer (when stationary)\"";
+  jsonResult += "},";
+  
+  // Add EEPROM sentinel value
+  jsonResult += "\"eepromSentinel\":{";
+  jsonResult += "\"name\":\"EEPROM Sentinel Value\",";
+  jsonResult += "\"value\":" + String(EEPROM_WRITTEN_SENTINEL_VALUE) + ",";
+  jsonResult += "\"default\":" + String(EEPROM_WRITTEN_SENTINEL_VALUE) + ",";
+  jsonResult += "\"unit\":\"\",";
+  jsonResult += "\"description\":\"Changing this value will reset all EEPROM settings to defaults\"";
+  jsonResult += "}";
+  
+  jsonResult += "}";
+  webServer.send(200, "application/json", jsonResult);
+}
 
-  // Task loop - continuously handle client requests
-  for(;;) {
-    // Process DNS requests
-    dnsServer.processNextRequest();
+// Handler for captive portal - redirect all unhandled requests to the root page
+void handleNotFound() {
+  // For captive portal functionality - send Apple and Android specific headers
+  if (webServer.hostHeader() != WiFi.softAPIP().toString()) {
+    // Special headers for captive portal detection
+    webServer.sendHeader("Location", String("http://") + WiFi.softAPIP().toString(), true);
     
-    // Handle web server clients
-    server.handleClient();
+    // Captive portal detection headers for various devices
+    webServer.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    webServer.sendHeader("Pragma", "no-cache");
+    webServer.sendHeader("Expires", "-1");
     
-    // Small delay to prevent task starvation
-    delay(5);
-    // No need to reset watchdog from this task
+    webServer.send(302, "text/plain", ""); // 302 Redirect
+    debug_print("WEB", "Captive portal redirect to root page");
+  } else {
+    // If they're already at our IP but requested an unknown URI,
+    // just serve the main page
+    handleRoot();
   }
 }
 
-// Initialize the web server on the second core
-void init_web_server() {
-  Serial.println("*** Initializing web server on second core... ***");
-  // No need to reset watchdog here
+// Parse telemetry data string into JSON format
+String parseTelemetryToJSON(const String& telemetryData) {
+  // Initialize JSON structure
+  String jsonResult = "{";
   
-  // Create task on core 1 (second core)
+  // Extract values from the telemetry string
+  float gForce = 0.0f;
+  int motor1Throttle = 0;
+  int motor2Throttle = 0;
+  float accelUsed = 0.0f;
+  
+  // Accelerometer data
+  int rawAccelPos = telemetryData.indexOf("Raw Accel G:");
+  if (rawAccelPos >= 0) {
+    gForce = telemetryData.substring(rawAccelPos + 12).toFloat();
+  }
+  
+  // RC Throttle data
+  int throttlePos = telemetryData.indexOf("RC Throttle:");
+  if (throttlePos >= 0) {
+    motor1Throttle = telemetryData.substring(throttlePos + 12).toInt();
+    motor2Throttle = motor1Throttle; // Assume same for both motors unless specified
+  }
+  
+  // Motor PWM values for more accurate throttle percentage
+  int motor1PWMPos = telemetryData.indexOf("Motor1 PWM:");
+  if (motor1PWMPos >= 0) {
+    int pwmValue = telemetryData.substring(motor1PWMPos + 11).toInt();
+    // Convert PWM (1500-2000) to percentage (0-100)
+    if (pwmValue > 1500) {
+      motor1Throttle = (pwmValue - 1500) / 5; // 500 range maps to 0-100%
+    }
+  }
+  
+  int motor2PWMPos = telemetryData.indexOf("Motor2 PWM:");
+  if (motor2PWMPos >= 0) {
+    int pwmValue = telemetryData.substring(motor2PWMPos + 11).toInt();
+    // Convert PWM (1500-2000) to percentage (0-100)
+    if (pwmValue > 1500) {
+      motor2Throttle = (pwmValue - 1500) / 5; // 500 range maps to 0-100%
+    }
+  }
+  
+  // Get the accelerometer used value from X: Y: Z: Used value: format
+  int usedValuePos = telemetryData.indexOf("Used value:");
+  if (usedValuePos >= 0) {
+    accelUsed = telemetryData.substring(usedValuePos + 11).toFloat();
+  }
+  
+  // Build JSON object with all values
+  jsonResult += "\"gForce\":" + String(gForce, 2) + ",";
+  jsonResult += "\"motor1Throttle\":" + String(motor1Throttle) + ",";
+  jsonResult += "\"motor2Throttle\":" + String(motor2Throttle) + ",";
+  jsonResult += "\"accelUsed\":" + String(accelUsed, 2);
+  
+  // Add additional data that might be useful
+  
+  // Battery voltage if available
+  int batteryPos = telemetryData.indexOf("Battery:");
+  if (batteryPos >= 0) {
+    float battery = telemetryData.substring(batteryPos + 9).toFloat();
+    jsonResult += ",\"battery\":" + String(battery, 2);
+  }
+  
+  // RPM if calculated (calculated in spin_control.cpp)
+  int rpm = 0;
+  int rpmPos = telemetryData.indexOf("RPM:");
+  if (rpmPos >= 0) {
+    rpm = telemetryData.substring(rpmPos + 4).toInt();
+  } else {
+    // Calculate RPM from G-force using the formula: RPM = sqrt(G / (0.00001118 * r))
+    float radius = 10.0; // Default radius in cm if not specified
+    
+    // Get actual radius if available
+    int radiusPos = telemetryData.indexOf("Radius:");
+    if (radiusPos >= 0) {
+      radius = telemetryData.substring(radiusPos + 8).toFloat();
+    }
+    
+    // Use the accelUsed value which already has the zero G offset subtracted
+    if (accelUsed > 0.1) { // Only calculate if G-force is significant
+      rpm = sqrt(accelUsed / (0.00001118 * radius));
+    }
+  }
+  jsonResult += ",\"rpm\":" + String(rpm);
+  
+  // Radius setting
+  int radiusPos = telemetryData.indexOf("Radius:");
+  if (radiusPos >= 0) {
+    float radius = telemetryData.substring(radiusPos + 8).toFloat();
+    jsonResult += ",\"radius\":" + String(radius, 2);
+  }
+  
+  jsonResult += "}";
+  return jsonResult;
+}
+
+// Function to be called from debug_handler.cpp to update the web data
+void update_web_data(const String& telemetry, const String& logs) {
+  portENTER_CRITICAL(&webDataMux);
+  strncpy(webTelemetryBuffer, telemetry.c_str(), sizeof(webTelemetryBuffer) - 1);
+  webTelemetryBuffer[sizeof(webTelemetryBuffer) - 1] = '\0';
+  
+  strncpy(webLogBuffer, logs.c_str(), sizeof(webLogBuffer) - 1);
+  webLogBuffer[sizeof(webLogBuffer) - 1] = '\0';
+  portEXIT_CRITICAL(&webDataMux);
+}
+
+// Web server task function to run in separate thread
+void web_server_task(void *parameter) {
+  // Reduce WiFi power to minimum to avoid interference
+  WiFi.setTxPower(WIFI_POWER_MINUS_1dBm);
+  
+  // Configure access point
+  WiFi.softAP(ssid, password);
+  IPAddress myIP = WiFi.softAPIP();
+  
+  // Set up DNS server to catch all domains
+  dnsServer.start(DNS_PORT, "*", myIP);
+  
+  // Set up web server handlers
+  webServer.on("/", HTTP_GET, handleRoot);
+  webServer.on("/telemetry", HTTP_GET, handleTelemetry);
+  webServer.on("/logs", HTTP_GET, handleLogs);
+  webServer.on("/clear", HTTP_POST, handleClear);
+  webServer.on("/eeprom", HTTP_GET, handleEEPROM);
+  
+  // Special captive portal detection handlers for various devices
+  webServer.on("/generate_204", HTTP_GET, handleRoot);  // Android captive portal detection
+  webServer.on("/connecttest.txt", HTTP_GET, handleRoot); // Microsoft captive portal detection
+  webServer.on("/redirect", HTTP_GET, handleRoot); // Microsoft redirect
+  webServer.on("/hotspot-detect.html", HTTP_GET, handleRoot); // Apple captive portal detection
+  webServer.on("/success.txt", HTTP_GET, handleRoot); // Various captive portal tests
+  webServer.on("/ncsi.txt", HTTP_GET, handleRoot); // Windows NCSI detection
+  
+  // Catch-all handler for any other requests
+  webServer.onNotFound(handleNotFound);
+  
+  // Start the server
+  webServer.begin();
+  server_running = true;
+  
+  debug_print("WEB", "Web server started");
+  
+  // Main loop for the web server task
+  while (true) {
+    // Process DNS and web server requests
+    dnsServer.processNextRequest();
+    webServer.handleClient();
+    
+    // Small delay to avoid hogging CPU
+    delay(10);
+  }
+}
+
+// Function to start the web server in a separate task
+void start_web_server() {
+  // Check if server is already running
+  if (server_running) {
+    debug_print("WEB", "Web server is already running");
+    return;
+  }
+  
+  // Create task with increased stack size
   xTaskCreatePinnedToCore(
-    web_server_task,   // Function to implement the task
-    "WebServerTask",   // Name of the task
-    8192,              // Stack size in words
-    NULL,              // Task input parameter
-    1,                 // Priority of the task
+    web_server_task,   // Task function
+    "WebServerTask",   // Task name
+    WEB_SERVER_TASK_STACK_SIZE,  // Stack size 
+    NULL,              // Parameters
+    1,                 // Priority
     NULL,              // Task handle
-    1                  // Core where the task should run (1 = second core)
+    1                  // Core (1 = second core)
   );
-  
-  Serial.println("*** Web server task created ***");
-  // No need to reset watchdog here
+}
+
+// Function to initialize the web server (API compatibility wrapper)
+void init_web_server() {
+  start_web_server();
 } 

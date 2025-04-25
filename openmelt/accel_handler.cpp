@@ -15,6 +15,7 @@
 #include <arduino.h>
 #include "melty_config.h"
 #include "accel_handler.h"
+#include "debug_handler.h"
 #include <Wire.h>
 #include "src/SparkFun_LIS331/src/SparkFun_LIS331.h"
 
@@ -34,6 +35,8 @@ void init_accel() {
 
   //sets accelerometer to specified scale (100, 200, 400g)
   xl.setFullScale(ACCEL_RANGE);
+  
+  debug_printf("ACCEL", "Accelerometer initialized with range: %d g", ACCEL_MAX_SCALE);
 }
 
 //reads accel and converts to G's
@@ -49,14 +52,8 @@ float get_accel_force_g() {
     float y_g = xl.convertToG(ACCEL_MAX_SCALE, y);
     float z_g = xl.convertToG(ACCEL_MAX_SCALE, z);
     
-    Serial.print("Raw Accel - X: ");
-    Serial.print(x_g);
-    Serial.print("g, Y: ");
-    Serial.print(y_g);
-    Serial.print("g, Z: ");
-    Serial.print(z_g);
-    Serial.print("g, Used value: ");
-    Serial.println(xl.convertToG(ACCEL_MAX_SCALE, x));
+    debug_printf("ACCEL", "Raw Accel - X: %.2fg, Y: %.2fg, Z: %.2fg, Used value: %.2fg", 
+                x_g, y_g, z_g, xl.convertToG(ACCEL_MAX_SCALE, x));
     
     last_accel_debug = millis();
   }

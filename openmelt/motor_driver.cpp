@@ -3,6 +3,7 @@
 #include "arduino.h"
 #include "melty_config.h"
 #include "motor_driver.h"
+#include "debug_handler.h"
 #include <ESP32Servo.h>  // Using ESP32-specific servo library
 
 // Servo objects for ESC control when using SERVO_PWM_THROTTLE
@@ -29,11 +30,11 @@ int get_motor2_pulse_width() {
 void set_direct_esc_control(bool enable) {
   direct_esc_control = enable;
   if (enable) {
-    Serial.println("*** DIRECT ESC CONTROL ENABLED ***");
-    Serial.println("Bypassing translational drift for direct throttle testing");
+    debug_print_level(DEBUG_WARNING, "MOTOR", "DIRECT ESC CONTROL ENABLED");
+    debug_print("MOTOR", "Bypassing translational drift for direct throttle testing");
   } else {
-    Serial.println("*** DIRECT ESC CONTROL DISABLED ***");
-    Serial.println("Returning to normal translational drift control");
+    debug_print("MOTOR", "DIRECT ESC CONTROL DISABLED");
+    debug_print("MOTOR", "Returning to normal translational drift control");
   }
 }
 
@@ -55,10 +56,7 @@ void set_esc_throttle(float throttle_percent) {
     motor1_servo.writeMicroseconds(pulse_width);
     motor2_servo.writeMicroseconds(pulse_width);
     
-    Serial.print("Direct ESC Control - Throttle: ");
-    Serial.print(throttle_percent * 100);
-    Serial.print("%, PWM: ");
-    Serial.println(pulse_width);
+    debug_printf("MOTOR", "Direct ESC Control - Throttle: %.1f%%, PWM: %d", throttle_percent * 100, pulse_width);
   }
 }
 
@@ -92,7 +90,7 @@ void arm_calibrate_escs(bool calibrate) {
   if (calibrate) {
     // ESC Calibration sequence
     // 1. Send max signal (this usually enters programming mode)
-    Serial.println("Calibration: Set throttle to maximum");
+    debug_print("MOTOR", "Calibration: Set throttle to maximum");
     motor1_servo.writeMicroseconds(2000);
     motor2_servo.writeMicroseconds(2000);
     current_motor1_pulse_width = 2000;
@@ -100,14 +98,14 @@ void arm_calibrate_escs(bool calibrate) {
     delay(5000);
     
     // 2. Send neutral signal
-    Serial.println("Calibration: Set throttle to neutral");
+    debug_print("MOTOR", "Calibration: Set throttle to neutral");
     motor1_servo.writeMicroseconds(1500);
     motor2_servo.writeMicroseconds(1500);
     current_motor1_pulse_width = 1500;
     current_motor2_pulse_width = 1500;
     delay(5000);
     
-    Serial.println("Calibration complete - ESCs should now be calibrated");
+    debug_print("MOTOR", "Calibration complete - ESCs should now be calibrated");
   } else {
     // Normal arming sequence
     // Start with neutral signal
@@ -128,10 +126,7 @@ void motor_on(float throttle_percent, int motor_pin) {
   // Debug output every 500ms
   static unsigned long last_debug = 0;
   if (millis() - last_debug > 500) {
-    Serial.print("Motor_on called - Throttle percent: ");
-    Serial.print(throttle_percent * 100);
-    Serial.print("%, Motor pin: ");
-    Serial.println(motor_pin);
+    debug_printf("MOTOR", "Motor_on called - Throttle percent: %.2f%%, Motor pin: %d", throttle_percent * 100, motor_pin);
     last_debug = millis();
   }
 
@@ -164,11 +159,7 @@ void motor_on(float throttle_percent, int motor_pin) {
     
     // Debug pulse width calculation
     if (millis() - last_debug > 500) {
-      Serial.print("Input throttle: ");
-      Serial.print(throttle_percent * 100);
-      Serial.print("%, Output PWM: ");
-      Serial.print(pulse_width);
-      Serial.println("μs");
+      debug_printf("MOTOR", "Input throttle: %.2f%%, Output PWM: %d μs", throttle_percent * 100, pulse_width);
     }
     
     if (motor_pin == MOTOR_PIN1) {

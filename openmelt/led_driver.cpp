@@ -1,13 +1,22 @@
 #include "arduino.h"
 #include "melty_config.h"
+#include "spin_control.h"  // Add this to access get_config_mode()
 
 #if USE_RGB_LED
 #include <FastLED.h>
 
 CRGB leds[NUM_RGB_LEDS];
 
+// External function declaration instead of including the whole header
+extern bool get_config_mode(void);
+
 // Define RGB color values
 CRGB getColorValue(led_color_t color) {
+  // Check if in config mode - override with config color
+  if (get_config_mode() && color != CONFIG) {
+    return getColorValue(CONFIG_LED_COLOR);
+  }
+
   switch(color) {
     case RED:
       return CRGB::Red;
@@ -23,6 +32,8 @@ CRGB getColorValue(led_color_t color) {
       return CRGB::Magenta;
     case ORANGE:
       return CRGB::Orange;
+    case CONFIG:
+      return CRGB::Cyan;  // Using Cyan as the config color for high visibility
     default:
       return CRGB::Green;
   }
@@ -45,15 +56,21 @@ void heading_led_on(int shimmer) {
   //check to see if we should "shimmer" the LED to indicate something to user
   if (shimmer == 1) {
     if (micros() & (1 << 10)) {
-      leds[0] = getColorValue(RGB_LED_COLOR);
+      for (int i = 0; i < NUM_RGB_LEDS; i++) {
+        leds[i] = getColorValue(RGB_LED_COLOR);
+      }
       FastLED.show();
     } else {
-      leds[0] = CRGB::Black;
+      for (int i = 0; i < NUM_RGB_LEDS; i++) {
+        leds[i] = CRGB::Black;
+      }
       FastLED.show();
     }  
   } else {
     //just turn LED on with the configured color
-    leds[0] = getColorValue(RGB_LED_COLOR);
+    for (int i = 0; i < NUM_RGB_LEDS; i++) {
+      leds[i] = getColorValue(RGB_LED_COLOR);
+    }
     FastLED.show();
   }
 #else
@@ -73,7 +90,9 @@ void heading_led_on(int shimmer) {
 
 void heading_led_off() {
 #if USE_RGB_LED
-  leds[0] = CRGB::Black;
+  for (int i = 0; i < NUM_RGB_LEDS; i++) {
+    leds[i] = CRGB::Black;
+  }
   FastLED.show();
 #else
   digitalWrite(HEADING_LED_PIN, LOW);

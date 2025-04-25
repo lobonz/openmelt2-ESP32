@@ -9,6 +9,7 @@
 #include "led_driver.h"
 #include "battery_monitor.h"
 #include "web_server.h"
+#include "debug_handler.h"
 #include <WiFi.h>
 #include <WebServer.h>
 
@@ -28,6 +29,9 @@ const char* password = "hammertime123";
 
 // Web server on port 80
 WebServer server(80);
+
+// Counter to reduce diagnostic update frequency
+unsigned long last_diagnostic_update = 0;
 
 void service_watchdog() {
 #ifdef ENABLE_WATCHDOG
@@ -55,7 +59,12 @@ void setup() {
   
   Serial.begin(115200);
   delay(1000);
-  Serial.println("\n\n*** OpenMelt starting up... ***");
+  Serial.println("Starting OpenMelt...");
+  
+  // Initialize debug handler first before any debug calls
+  init_debug_handler();
+  
+  debug_print("SYSTEM", "*** OpenMelt starting up... ***");
 
   //get motor drivers setup (and off!) first thing
   init_motors();
@@ -63,12 +72,10 @@ void setup() {
 
 #ifdef ENABLE_WATCHDOG
   //returns actual watchdog timeout MS
-  Serial.println("Enabling watchdog with increased timeout");
+  debug_print("SYSTEM", "Enabling watchdog with increased timeout");
   // Use a longer timeout for initial setup
   int watchdog_ms = Watchdog.enable(5000); // Increased from 2000ms
-  Serial.print("Watchdog timeout set to: ");
-  Serial.print(watchdog_ms);
-  Serial.println(" ms");
+  debug_printf("SYSTEM", "Watchdog timeout set to: %d ms", watchdog_ms);
 #endif
 
   init_rc();
@@ -83,49 +90,53 @@ void setup() {
   service_watchdog(); // Reset watchdog
 #endif
 
-  // Setup WiFi AP BEFORE RC checks so web server works even without RC controller
-  Serial.println("*** Setting up WiFi Access Point... ***");
+  // Setup WiFi - using longer delays to ensure stability
+  debug_print("WIFI", "Setting up WiFi Access Point...");
   
   // Complete WiFi reset
   WiFi.disconnect(true);
   service_watchdog(); // Reset watchdog
+  delay(200);
   
   WiFi.softAPdisconnect(true);
   service_watchdog(); // Reset watchdog
+  delay(200);
   
-  delay(500);
+  WiFi.mode(WIFI_OFF);
   service_watchdog(); // Reset watchdog
+  delay(500);
   
   // Set WiFi mode explicitly
-  Serial.println("Setting WiFi mode to AP");
+  debug_print("WIFI", "Setting WiFi mode to AP");
   WiFi.mode(WIFI_AP);
   service_watchdog(); // Reset watchdog
-  
   delay(500);
-  service_watchdog(); // Reset watchdog
   
-  // Create the access point
-  Serial.print("Creating access point with SSID: ");
-  Serial.println(ssid);
+  // Create the access point with reduced power to minimize interference
+  debug_printf("WIFI", "Creating access point with SSID: %s", ssid);
+  WiFi.setTxPower(WIFI_POWER_11dBm); // Reduce WiFi power
   bool apStarted = WiFi.softAP(ssid, password);
   service_watchdog(); // Reset watchdog
+  delay(500); // More time for AP to stabilize
   
   if (apStarted) {
-    Serial.println("*** Access point created successfully ***");
+    debug_print("WIFI", "Access point created successfully");
     IPAddress IP = WiFi.softAPIP();
-    Serial.print("AP IP address: ");
-    Serial.println(IP);
+    debug_printf("WIFI", "AP IP address: %s", IP.toString().c_str());
   } else {
-    Serial.println("*** Failed to create access point! ***");
+    debug_print_level(DEBUG_ERROR, "WIFI", "Failed to create access point!");
   }
   service_watchdog(); // Reset watchdog
   
   // Initialize web server
-  Serial.println("Starting web server task...");
+  debug_print("SYSTEM", "Starting web server task...");
   init_web_server();
   service_watchdog(); // Reset watchdog
   
-  Serial.println("*** Setup complete! ***");
+  // Give system time to stabilize before continuing
+  delay(500);
+  
+  debug_print("SYSTEM", "Setup complete!");
 
 //if JUST_DO_DIAGNOSTIC_LOOP - then we just loop and display debug info via USB (good for testing)
 #ifdef JUST_DO_DIAGNOSTIC_LOOP
@@ -146,35 +157,15 @@ void setup() {
 
 //dumps out diagnostics info
 static void echo_diagnostics() {
-  String diagnosticData = "";
-  
-  diagnosticData += "Raw Accel G: " + String(get_accel_force_g());
-  diagnosticData += "  RC Health: " + String(rc_signal_is_healthy());
-  diagnosticData += "  RC Throttle: " + String(rc_get_throttle_percent());
-  diagnosticData += "  RC L/R: " + String(rc_get_leftright());
-  diagnosticData += "  RC F/B: " + String(rc_get_forback());
-
-  // Add motor PWM values if using servo PWM throttle
-  if (THROTTLE_TYPE == SERVO_PWM_THROTTLE) {
-    diagnosticData += "  Motor1 PWM: " + String(get_motor1_pulse_width()) + "us";
-    diagnosticData += "  Motor2 PWM: " + String(get_motor2_pulse_width()) + "us";
+  // Don't update diagnostics too frequently - at most once every 100ms
+  unsigned long current_time = millis();
+  if (current_time - last_diagnostic_update < 100) {
+    return;
   }
-
-#ifdef BATTERY_ALERT_ENABLED
-  diagnosticData += "  Battery Voltage: " + String(get_battery_voltage());
-#endif 
+  last_diagnostic_update = current_time;
   
-#ifdef ENABLE_EEPROM_STORAGE  
-  diagnosticData += "  Accel Radius: " + String(load_accel_mount_radius());
-  diagnosticData += "  Heading Offset: " + String(load_heading_led_offset());
-  diagnosticData += "  Zero G Offset: " + String(load_accel_zero_g_offset());
-#endif  
-  diagnosticData += "\n";
-
-  Serial.print(diagnosticData);
-  
-  // Update the web server with the latest data
-  update_web_data(diagnosticData);
+  // Use the new debug handler to update and get diagnostics
+  update_standard_diagnostics();
 }
 
 //Used to flash out max recorded RPM 100's of RPMs
@@ -267,6 +258,7 @@ void loop() {
     } else if (millis() - direct_mode_check_start > 2000) {
       // Enable direct ESC control after holding position for 2 seconds
       set_direct_esc_control(true);
+      debug_print("CONTROL", "Entering direct ESC control mode");
     }
   } else {
     checked_direct_esc_mode = false;
@@ -282,6 +274,7 @@ void loop() {
       } else if (millis() - low_throttle_start > 1000) {
         // Exit direct ESC control mode
         set_direct_esc_control(false);
+        debug_print("CONTROL", "Exiting direct ESC control mode");
         low_throttle_start = 0;
         return;
       }
@@ -291,6 +284,14 @@ void loop() {
     
     float throttle = rc_get_throttle_percent() / 100.0f;
     set_esc_throttle(throttle);
+    
+    // Only update this debug message occasionally to reduce load
+    static unsigned long last_direct_throttle_debug = 0;
+    if (millis() - last_direct_throttle_debug > 250) {
+      debug_printf("CONTROL", "Direct ESC throttle: %.2f", throttle);
+      last_direct_throttle_debug = millis();
+    }
+    
     echo_diagnostics();
     delay(20); // Small delay to avoid flooding
     return;  // Skip normal loop processing
@@ -304,10 +305,8 @@ void loop() {
     handle_bot_idle();
   }
   
-  // Service web server if enabled
-  #ifdef ENABLE_WEBSERVER
-  server.handleClient();
-  #endif
+  // Service web server on the main thread
+  // NOTE: This is now avoided as we use a separate task for the web server
   
 #else
   // In standalone web server mode, just handle idle state and echo diagnostics
@@ -322,8 +321,8 @@ void loop() {
       high_throttle_start = millis();
     } else if (millis() - high_throttle_start > 2000 && !standalone_motor_test_enabled) {
       standalone_motor_test_enabled = true;
-      Serial.println("*** STANDALONE MOTOR TEST ENABLED ***");
-      Serial.println("Move throttle to control ESCs directly");
+      debug_print_level(DEBUG_WARNING, "TEST", "STANDALONE MOTOR TEST ENABLED");
+      debug_print("TEST", "Move throttle to control ESCs directly");
     }
   } else {
     high_throttle_start = 0;
@@ -335,7 +334,7 @@ void loop() {
         low_throttle_start = millis();
       } else if (millis() - low_throttle_start > 1000) {
         standalone_motor_test_enabled = false;
-        Serial.println("*** STANDALONE MOTOR TEST DISABLED ***");
+        debug_print("TEST", "STANDALONE MOTOR TEST DISABLED");
         motors_off();  // Turn off motors when exiting test mode
         low_throttle_start = 0;
       }
@@ -357,10 +356,7 @@ void loop() {
       // Debug output every 500ms
       static unsigned long last_motor_debug = 0;
       if (millis() - last_motor_debug > 500) {
-        Serial.print("Direct ESC control - Throttle: ");
-        Serial.print(throttle * 100);
-        Serial.print("%, PWM: ");
-        Serial.println(pulse_width);
+        debug_printf("TEST", "Direct ESC control - Throttle: %.0f%%, PWM: %d", throttle * 100, pulse_width);
         last_motor_debug = millis();
       }
     }
@@ -374,8 +370,7 @@ void loop() {
   echo_diagnostics();
   delay(50); // Shorter delay for more responsive control
   
-  // Always service web server in standalone mode
-  server.handleClient();
+  // No longer calling server.handleClient() here as it's handled in the separate task
 #endif
 
 }

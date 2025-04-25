@@ -1,7 +1,7 @@
 //this module handles calculation and timing loop for translational drift
 //direction of rotation assumed to be CLOCKWISE (but should work counter-clockwise)
 
-#include "arduino.h"
+#include <Arduino.h>
 #include "melty_config.h"
 #include "motor_driver.h"
 #include "rc_handler.h"
@@ -10,6 +10,7 @@
 #include "config_storage.h"
 #include "led_driver.h"
 #include "battery_monitor.h"
+#include "debug_handler.h"
 
 #define ACCEL_MOUNT_RADIUS_MINIMUM_CM 0.2                 //Never allow interactive config to set below this value
 #define LEFT_RIGHT_CONFIG_RADIUS_ADJUST_DIVISOR 50.0f     //How quick accel. radius is adjusted in config mode (larger values = slower)
@@ -283,6 +284,9 @@ void spin_one_rotation(void) {
   unsigned long start_time = micros();
   unsigned long time_spent_this_rotation_us = 0;
 
+  // Add tracking for last diagnostic update
+  static unsigned long last_diagnostic_update = 0;
+
   //tracking cycle count is needed to alternate cycles for non-translation (overflow is non-issue)
   static unsigned long cycle_count = 0;
   cycle_count++;
@@ -317,6 +321,14 @@ void spin_one_rotation(void) {
 
     //displays heading LED at correct location
     update_heading_led(melty_parameters, time_spent_this_rotation_us);
+
+    // Update diagnostic data periodically during rotation
+    // Use millis() here because we want real-time intervals, not rotation-relative time
+    unsigned long current_millis = millis();
+    if (current_millis - last_diagnostic_update > 100) {  // Update every 100ms
+      update_standard_diagnostics();
+      last_diagnostic_update = current_millis;
+    }
 
     time_spent_this_rotation_us = micros() - start_time;
 

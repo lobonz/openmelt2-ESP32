@@ -3,6 +3,7 @@
 #include "rc_handler.h"
 #include "arduino.h"
 #include "melty_config.h"
+#include "debug_handler.h"
 
 #define RC_DATA_UNLOCKED 0
 #define RC_DATA_LOCKED 1 
@@ -103,13 +104,8 @@ int rc_get_throttle_percent() {
   // Debug output every 1000ms
   static unsigned long last_debug = 0;
   if (millis() - last_debug > 1000) {
-    Serial.print("RC signal - Raw pulse: ");
-    Serial.print(pulse_length);
-    Serial.print("μs, Thresholds - Idle: ");
-    Serial.print(IDLE_THROTTLE_PULSE_LENGTH);
-    Serial.print("μs, Full: ");
-    Serial.print(FULL_THROTTLE_PULSE_LENGTH);
-    Serial.println("μs");
+    debug_printf("RC", "RC signal - Raw pulse: %dμs, Thresholds - Idle: %dμs, Full: %dμs",
+               pulse_length, IDLE_THROTTLE_PULSE_LENGTH, FULL_THROTTLE_PULSE_LENGTH);
     last_debug = millis();
   }
 
@@ -134,13 +130,8 @@ int rc_get_throttle_percent() {
     // Debug the throttle calculation for values above 1550μs
     static unsigned long last_calc_debug = 0;
     if (millis() - last_calc_debug > 2000) {
-      Serial.print("Throttle calculation: (");
-      Serial.print(pulse_length);
-      Serial.print(" - 1550) * 100 / (");
-      Serial.print(FULL_THROTTLE_PULSE_LENGTH);
-      Serial.print(" - 1550) = ");
-      Serial.print(throttle_percent);
-      Serial.println("%");
+      debug_printf("RC", "Throttle calculation: (%d - 1550) * 100 / (%d - 1550) = %d%%", 
+                 pulse_length, FULL_THROTTLE_PULSE_LENGTH, (int)throttle_percent);
       last_calc_debug = millis();
     }
     
@@ -207,5 +198,7 @@ void init_rc(void) {
   attachInterrupt(digitalPinToInterrupt(forback_rc_channel.pin), forback_rc_change, CHANGE);
   attachInterrupt(digitalPinToInterrupt(leftright_rc_channel.pin), leftright_rc_change, CHANGE);
   attachInterrupt(digitalPinToInterrupt(throttle_rc_channel.pin), throttle_rc_change, CHANGE);
+  
+  debug_print("RC", "RC interrupt handlers initialized");
 }
 

@@ -28,11 +28,11 @@
 
 #define LEFT_RIGHT_HEADING_CONTROL_DIVISOR 1.5f   //How quick steering is (larger values = slower)
 
-#define MIN_TRANSLATION_RPM 400                   //full power spin in below this number (increasing can reduce spin-up time)
+#define MIN_TRANSLATION_RPM 250                   //full power spin in below this number (increasing can reduce spin-up time)
 
 //----------RGB LED CONFIGURATION----------
 #define USE_RGB_LED true                         // Set to true to use RGB LED, false for standard LED
-#define NUM_RGB_LEDS 1                            // Number of RGB LEDs in the strip/chain
+#define NUM_RGB_LEDS 4                            // Number of RGB LEDs in the strip/chain
 #define RGB_LED_TYPE WS2812B                      // Type of RGB LED being used
 
 // RGB LED color options
@@ -43,10 +43,12 @@ enum led_color_t {
   GREEN,
   PURPLE,
   MAGENTA,
-  ORANGE
+  ORANGE,
+  CONFIG  // New color for config mode
 };
 
 #define RGB_LED_COLOR MAGENTA                       // Default color for RGB LED
+#define CONFIG_LED_COLOR BLUE                       // Color for config mode indicator
 
 //----------PIN MAPPINGS----------
 //RC pins must be Arduino interrupt pins
@@ -63,7 +65,7 @@ enum led_color_t {
 #define THROTTLE_RC_CHANNEL_PIN 3                 // To Throttle on RC receiver (Pin 0 on Arduino Micro labelled as "RX" - https://docs.arduino.cc/hacking/hardware/PinMapping32u4)
 #define EMERGENCY_OFF 4                           // To cut power to both ESCs
 
-#define HEADING_LED_PIN	21                        //To heading LED (pin 21 is on-board M5StampS3 RGB LED)
+#define HEADING_LED_PIN	7                        //To heading LED (pin 21 is on-board M5StampS3 RGB LED)
 
 //no configuration changes are needed if only 1 motor is used!
 #define MOTOR_PIN1 9                              //Pin for Motor 1 driver
