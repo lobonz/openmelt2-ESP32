@@ -13,8 +13,20 @@ extern bool get_config_mode(void);
 // Define RGB color values
 CRGB getColorValue(led_color_t color) {
   // Check if in config mode - override with config color
+  // But use direct color mapping to avoid potential recursion
   if (get_config_mode() && color != CONFIG) {
-    return getColorValue(CONFIG_LED_COLOR);
+    // Return config color directly instead of recursive call
+    switch(CONFIG_LED_COLOR) {
+      case RED: return CRGB::Red;
+      case BLUE: return CRGB::Blue;
+      case YELLOW: return CRGB::Yellow;
+      case GREEN: return CRGB::Green;
+      case PURPLE: return CRGB::Purple;
+      case MAGENTA: return CRGB::Magenta;
+      case ORANGE: return CRGB::Orange;
+      case CONFIG: return CRGB::Cyan;
+      default: return CRGB::Cyan; // Default config indicator is cyan
+    }
   }
 
   switch(color) {
