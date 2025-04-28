@@ -11,6 +11,8 @@ Specifically the [**M5 Stamp S3**](https://docs.m5stack.com/en/core/M5StampS3%20
 The SparkFun_LIS331 library has been included in the src folder so the OPEN_DRAIN variable could be changed to OPEN_DRAIN_MODE to prevent it clashing with a variable of the same name in the M5 Stack libraries - this is the only change to the accelerometer library.
 There may be a better way to deal with this?
 
+For current code status refer to the [Arduino Code Readme](https://github.com/lobonz/openmelt2-ESP32/blob/main/openmelt/README.md)
+
 ----
 
 Open Melt is an open-source translational drift (aka "melty brain") robot controller based on Arduino.
