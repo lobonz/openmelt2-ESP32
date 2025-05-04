@@ -45,7 +45,7 @@ void init_eeprom() {
   if (!eeprom_initialized) {
     if (EEPROM.begin(EEPROM_SIZE)) {
       eeprom_initialized = true;
-      debug_print("EEPROM", "EEPROM initialized with size %d bytes", EEPROM_SIZE);
+      debug_printf("EEPROM", "EEPROM initialized with size %d bytes", EEPROM_SIZE);
     } else {
       debug_print_level(DEBUG_ERROR, "EEPROM", "Failed to initialize EEPROM");
     }
@@ -75,7 +75,7 @@ void save_settings_to_eeprom(int led_offset, float accel_radius, float accel_zer
   
   // ESP32 requires explicit commit to save EEPROM data to flash
   if (EEPROM.commit()) {
-    debug_print("EEPROM", "Settings saved: LED offset=%d, accel_radius=%.2f, zero_g=%.2f", 
+    debug_printf("EEPROM", "Settings saved: LED offset=%d, accel_radius=%.2f, zero_g=%.2f", 
                 led_offset, accel_radius, accel_zero_g_offset);
   } else {
     debug_print_level(DEBUG_ERROR, "EEPROM", "Failed to commit EEPROM data");
