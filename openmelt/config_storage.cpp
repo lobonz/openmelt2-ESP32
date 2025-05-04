@@ -13,6 +13,10 @@
 #include <EEPROM.h>
 #include <arduino.h>
 #include "config_storage.h"
+#include "debug_handler.h"
+
+// For ESP32, we need to define EEPROM size
+#define EEPROM_SIZE 32
 
 #define EEPROM_WRITTEN_SENTINEL1_VALUE EEPROM_WRITTEN_SENTINEL_VALUE
 #define EEPROM_WRITTEN_SENTINEL2_VALUE EEPROM_WRITTEN_SENTINEL_VALUE
@@ -34,6 +38,19 @@
 #define EEPROM_ACCEL_OFFSET_BYTE3_LOC 9
 #define EEPROM_ACCEL_OFFSET_BYTE4_LOC 10
 
+static bool eeprom_initialized = false;
+
+// Initialize EEPROM for ESP32
+void init_eeprom() {
+  if (!eeprom_initialized) {
+    if (EEPROM.begin(EEPROM_SIZE)) {
+      eeprom_initialized = true;
+      debug_print("EEPROM", "EEPROM initialized with size %d bytes", EEPROM_SIZE);
+    } else {
+      debug_print_level(DEBUG_ERROR, "EEPROM", "Failed to initialize EEPROM");
+    }
+  }
+}
 
 //indicates values saved to EEPROM (doing 2x)
 static void write_sentinel() {
@@ -50,19 +67,30 @@ static int check_sentinel() {
 }
 
 void save_settings_to_eeprom(int led_offset, float accel_radius, float accel_zero_g_offset) {
+  init_eeprom();
   EEPROM.write(EEPROM_HEADING_LED_LOC, led_offset);
   EEPROM.put(EEPROM_ACCEL_RADIUS_BYTE1_LOC, accel_radius);
   EEPROM.put(EEPROM_ACCEL_OFFSET_BYTE1_LOC, accel_zero_g_offset);
   write_sentinel();
+  
+  // ESP32 requires explicit commit to save EEPROM data to flash
+  if (EEPROM.commit()) {
+    debug_print("EEPROM", "Settings saved: LED offset=%d, accel_radius=%.2f, zero_g=%.2f", 
+                led_offset, accel_radius, accel_zero_g_offset);
+  } else {
+    debug_print_level(DEBUG_ERROR, "EEPROM", "Failed to commit EEPROM data");
+  }
 }
 
 int load_heading_led_offset() {
+  init_eeprom();
   //if value hasn't been saved previously - return the default
   if (check_sentinel() != 1) return DEFAULT_LED_OFFSET_PERCENT;
   return EEPROM.read(EEPROM_HEADING_LED_LOC);
 }
 
 float load_accel_zero_g_offset() {
+  init_eeprom();
   //if value hasn't been saved previously - return the default
   if (check_sentinel() != 1) return DEFAULT_ACCEL_ZERO_G_OFFSET;
   float accel_zero_g_offset;
@@ -71,6 +99,7 @@ float load_accel_zero_g_offset() {
 }
 
 float load_accel_mount_radius() {
+  init_eeprom();
   //if value hasn't been saved previously - return the default
   if (check_sentinel() != 1) return DEFAULT_ACCEL_MOUNT_RADIUS_CM;
   float accel_radius;

@@ -82,7 +82,13 @@ void setup() {
   service_watchdog(); // Reset watchdog
   
 //load settings on boot
-#ifdef ENABLE_EEPROM_STORAGE  
+#ifdef ENABLE_EEPROM_STORAGE
+  debug_print("SYSTEM", "Initializing EEPROM for persistent storage");
+  // Initialize EEPROM first before loading settings
+  init_eeprom();
+  service_watchdog(); // Reset watchdog
+  
+  debug_print("SYSTEM", "Loading stored configuration");  
   load_melty_config_settings();
   service_watchdog(); // Reset watchdog
 #endif

@@ -2,6 +2,9 @@
 
 #ifdef ENABLE_EEPROM_STORAGE
 
+//initializes the EEPROM system (for ESP32 compatibility)
+void init_eeprom();
+
 //retrieves accelerometer mount radius from EEPROM
 float load_accel_mount_radius();
 
