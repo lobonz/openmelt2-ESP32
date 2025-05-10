@@ -148,18 +148,22 @@ void motor_on(float throttle_percent, int motor_pin) {
   
   if (THROTTLE_TYPE == SERVO_PWM_THROTTLE) {
     // For standard RC servo PWM with bi-directional ESCs
-    // Map throttle_percent (0-1.0) to pulse width (1500-2000μs)
-    // 1500μs = 0% throttle (neutral), 2000μs = 100% throttle (forward)
     int pulse_width = 1500;
     
-    // Only change from neutral if throttle is actually above 0
+    // Only proceed if throttle is actually above 0
     if (throttle_percent > 0) {
-      pulse_width = 1500 + (throttle_percent * 500);
+      // Use SERVO_PWM_TRANSLATE_PERCENT to determine the on-phase pulse width
+      // This sets the powered portion to a fixed percentage of maximum throttle
+      pulse_width = 1500 + (SERVO_PWM_TRANSLATE_PERCENT * 500);
+      
+      // Limit user throttle input to control duty cycle / portion of rotation
+      // that motors are on, but not the actual power level during on phase
     }
     
     // Debug pulse width calculation
     if (millis() - last_debug > 500) {
-      debug_printf("MOTOR", "Input throttle: %.2f%%, Output PWM: %d μs", throttle_percent * 100, pulse_width);
+      debug_printf("MOTOR", "Input throttle: %.2f%%, Translate percent: %.2f%%, Output PWM: %d μs", 
+                  throttle_percent * 100, SERVO_PWM_TRANSLATE_PERCENT * 100, pulse_width);
     }
     
     if (motor_pin == MOTOR_PIN1) {
@@ -188,13 +192,33 @@ void motor_coast(int motor_pin) {
     digitalWrite(motor_pin, LOW);  //same as "off" for brushed motors
   }
   if (THROTTLE_TYPE == SERVO_PWM_THROTTLE) {
-    // For bi-directional ESCs, send neutral pulse width (1500μs = 0% throttle)
+    // For bi-directional ESCs, handle coast mode based on SET_SERVO_PWM_COAST_PERCENT
     if (motor_pin == MOTOR_PIN1) {
-      current_motor1_pulse_width = 1500;
-      motor1_servo.writeMicroseconds(1500);
+      if (SET_SERVO_PWM_COAST_PERCENT <= 0.0f) {
+        // Use neutral (1500μs) if coast percent is zero
+        current_motor1_pulse_width = 1500;
+        motor1_servo.writeMicroseconds(1500);
+      } else {
+        // Calculate pulse width as a percentage of the current throttle
+        int pulse_width = 1500;
+        int throttle_range = current_motor1_pulse_width - 1500;
+        pulse_width = 1500 + (throttle_range * SET_SERVO_PWM_COAST_PERCENT);
+        current_motor1_pulse_width = pulse_width;
+        motor1_servo.writeMicroseconds(pulse_width);
+      }
     } else if (motor_pin == MOTOR_PIN2) {
-      current_motor2_pulse_width = 1500;
-      motor2_servo.writeMicroseconds(1500);
+      if (SET_SERVO_PWM_COAST_PERCENT <= 0.0f) {
+        // Use neutral (1500μs) if coast percent is zero
+        current_motor2_pulse_width = 1500;
+        motor2_servo.writeMicroseconds(1500);
+      } else {
+        // Calculate pulse width as a percentage of the current throttle
+        int pulse_width = 1500;
+        int throttle_range = current_motor2_pulse_width - 1500;
+        pulse_width = 1500 + (throttle_range * SET_SERVO_PWM_COAST_PERCENT);
+        current_motor2_pulse_width = pulse_width;
+        motor2_servo.writeMicroseconds(pulse_width);
+      }
     }
   }
 }

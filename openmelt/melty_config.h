@@ -121,6 +121,14 @@ enum throttle_modes {
 // 2. ESC should emit initialization tones (usually 1-3 tones)
 // 3. After initialization, the ESC is ready to accept throttle commands
 
+#define SET_SERVO_PWM_COAST_PERCENT 0.9f         // Set to a value between 0.0-1.0 to make coast use a % of current throttle
+                                                 // 0.0 = neutral position (1500μs), 0.5 = 50% of current throttle
+                                                 // Helps prevent voltage spikes when using damped mode in ESCs
+
+#define SERVO_PWM_TRANSLATE_PERCENT 1.0f         // Sets "on" portion of rotation to this % of max throttle (2000μs)
+                                                 // 1.0 = 100% (2000μs), 0.5 = 50% (1750μs)
+                                                 // Overrides user throttle input during powered phase
+
 #define DYNAMIC_PWM_MOTOR_ON_PORTION 0.5f       //if defined (and DYNAMIC_PWM_THROTTLE is set) portion of each rotation motor is on is fixed at this value
 
 //----------PWM MOTOR SETTINGS---------- 
