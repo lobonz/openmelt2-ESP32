@@ -231,12 +231,12 @@ static struct melty_parameters_t get_melty_parameters(void) {
 //handle translating forward
 static void translate_forward(struct melty_parameters_t melty_parameters, unsigned long time_spent_this_rotation_us) {
   if (time_spent_this_rotation_us >= melty_parameters.motor_start_phase_1 && time_spent_this_rotation_us <= melty_parameters.motor_stop_phase_1) {
-    motor_1_on(melty_parameters.throttle_percent);
+    motor_1_on(melty_parameters.throttle_percent, true);
   } else {
     motor_1_coast();
   }
   if (time_spent_this_rotation_us >= melty_parameters.motor_start_phase_2 || time_spent_this_rotation_us <= melty_parameters.motor_stop_phase_2) {        
-    motor_2_on(melty_parameters.throttle_percent);
+    motor_2_on(melty_parameters.throttle_percent, true);
   } else {
     motor_2_coast();
   }
@@ -245,12 +245,12 @@ static void translate_forward(struct melty_parameters_t melty_parameters, unsign
 //handle translating backward (motor1 and motor2 timings are swapped - offset by 180 degrees)
 static void translate_backward(struct melty_parameters_t melty_parameters, unsigned long time_spent_this_rotation_us) {
   if (time_spent_this_rotation_us >= melty_parameters.motor_start_phase_2 || time_spent_this_rotation_us <= melty_parameters.motor_stop_phase_2) {
-    motor_1_on(melty_parameters.throttle_percent);
+    motor_1_on(melty_parameters.throttle_percent, true);
   } else {
     motor_1_coast();
   }
   if (time_spent_this_rotation_us >= melty_parameters.motor_start_phase_1 && time_spent_this_rotation_us <= melty_parameters.motor_stop_phase_1) {
-    motor_2_on(melty_parameters.throttle_percent);
+    motor_2_on(melty_parameters.throttle_percent, true);
   } else {
     motor_2_coast();
   }
@@ -306,6 +306,21 @@ void spin_one_rotation(void) {
       melty_parameters_updated_this_rotation = true;
     }
 
+    // Check if we're under the minimum RPM for translation
+    bool spin_up_mode = (melty_parameters.rotation_interval_us > MAX_TRANSLATION_ROTATION_INTERVAL_US);
+
+    // Handle simple spinning (not translating)
+    // This happens either when the stick is centered or when RPM is too low for translation
+    if (spin_up_mode || melty_parameters.translate_forback == RC_FORBACK_NEUTRAL) {
+      // For simple spinning, just keep both motors on at user's throttle level
+      // Note: is_translating is FALSE here - using direct throttle control
+      motor_1_on(melty_parameters.throttle_percent, false);
+      motor_2_on(melty_parameters.throttle_percent, false);
+
+      // Skip the translation code since we're handling motors directly
+      goto update_led;
+    }
+
     //if translation direction is RC_FORBACK_NEUTRAL - robot cycles between forward and reverse translation for net zero translation
     //if motor 2 (or motor 1) is not present - control sequence remains identical (signal still generated for non-connected motor)
 
@@ -319,6 +334,7 @@ void spin_one_rotation(void) {
       translate_backward(melty_parameters, time_spent_this_rotation_us);
     }
 
+update_led:
     //displays heading LED at correct location
     update_heading_led(melty_parameters, time_spent_this_rotation_us);
 

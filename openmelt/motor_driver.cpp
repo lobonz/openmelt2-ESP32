@@ -121,12 +121,13 @@ void arm_calibrate_escs(bool calibrate) {
 //motor_X_coast functions are used for the unpowered phase of each rotation
 //motor_X_off functions are used for when the robot is spun-down
 
-void motor_on(float throttle_percent, int motor_pin) {
+void motor_on(float throttle_percent, int motor_pin, bool is_translating) {
 
   // Debug output every 500ms
   static unsigned long last_debug = 0;
   if (millis() - last_debug > 500) {
-    debug_printf("MOTOR", "Motor_on called - Throttle percent: %.2f%%, Motor pin: %d", throttle_percent * 100, motor_pin);
+    debug_printf("MOTOR", "Motor_on called - Throttle percent: %.2f%%, Motor pin: %d, Translating: %d", 
+               throttle_percent * 100, motor_pin, is_translating);
     last_debug = millis();
   }
 
@@ -152,18 +153,29 @@ void motor_on(float throttle_percent, int motor_pin) {
     
     // Only proceed if throttle is actually above 0
     if (throttle_percent > 0) {
-      // Use SERVO_PWM_TRANSLATE_PERCENT to determine the on-phase pulse width
-      // This sets the powered portion to a fixed percentage of maximum throttle
-      pulse_width = 1500 + (SERVO_PWM_TRANSLATE_PERCENT * 500);
-      
-      // Limit user throttle input to control duty cycle / portion of rotation
-      // that motors are on, but not the actual power level during on phase
+      if (direct_esc_control) {
+        // Direct ESC control mode - just use throttle directly
+        pulse_width = 1500 + (throttle_percent * 500);
+      } 
+      else if (is_translating) {
+        // Translational movement - use the fixed translate percentage
+        pulse_width = 1500 + (SERVO_PWM_TRANSLATE_PERCENT * 500);
+      }
+      else {
+        // Normal spinning (no translation) - use throttle directly
+        pulse_width = 1500 + (throttle_percent * 500);
+      }
     }
     
     // Debug pulse width calculation
     if (millis() - last_debug > 500) {
-      debug_printf("MOTOR", "Input throttle: %.2f%%, Translate percent: %.2f%%, Output PWM: %d μs", 
-                  throttle_percent * 100, SERVO_PWM_TRANSLATE_PERCENT * 100, pulse_width);
+      if (is_translating) {
+        debug_printf("MOTOR", "Translation mode - Input throttle: %.2f%%, SERVO_PWM_TRANSLATE_PERCENT: %.2f%%, Output PWM: %d μs", 
+                    throttle_percent * 100, SERVO_PWM_TRANSLATE_PERCENT * 100, pulse_width);
+      } else {
+        debug_printf("MOTOR", "Spin mode - Input throttle: %.2f%%, Output PWM: %d μs", 
+                    throttle_percent * 100, pulse_width);
+      }
     }
     
     if (motor_pin == MOTOR_PIN1) {
@@ -176,12 +188,12 @@ void motor_on(float throttle_percent, int motor_pin) {
   }
 }
 
-void motor_1_on(float throttle_percent) {
-  motor_on(throttle_percent, MOTOR_PIN1);
+void motor_1_on(float throttle_percent, bool is_translating) {
+  motor_on(throttle_percent, MOTOR_PIN1, is_translating);
 }
 
-void motor_2_on(float throttle_percent) {
-  motor_on(throttle_percent, MOTOR_PIN2);
+void motor_2_on(float throttle_percent, bool is_translating) {
+  motor_on(throttle_percent, MOTOR_PIN2, is_translating);
 }
 
 void motor_coast(int motor_pin) {

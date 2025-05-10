@@ -24,8 +24,10 @@ void set_direct_esc_control(bool enable);
 void set_esc_throttle(float throttle_percent);
 
 //turn motor_X_on (throttle_percent only used for dynamic PWM throttle mode)
-void motor_1_on(float throttle_percent);
-void motor_2_on(float throttle_percent);
+//is_translating flag indicates if this is part of a translational movement
+void motor_on(float throttle_percent, int motor_pin, bool is_translating = false);
+void motor_1_on(float throttle_percent, bool is_translating = false);
+void motor_2_on(float throttle_percent, bool is_translating = false);
 
 //motors shut-down (robot not translating)
 void motor_1_off();
