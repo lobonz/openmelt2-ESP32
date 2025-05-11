@@ -158,8 +158,21 @@ void motor_on(float throttle_percent, int motor_pin, bool is_translating) {
         pulse_width = 1500 + (throttle_percent * 500);
       } 
       else if (is_translating) {
-        // Translational movement - use the fixed translate percentage
-        pulse_width = 1500 + (SERVO_PWM_TRANSLATE_PERCENT * 500);
+        // Translational movement - calculate boosted throttle for the "on" phase
+        // First calculate the current throttle pulse width
+        int current_throttle_pulse = 1500 + (throttle_percent * 500);
+        
+        // Apply SERVO_PWM_TRANSLATE_PERCENT as a multiplier to the throttle percentage
+        float boosted_throttle = throttle_percent * SERVO_PWM_TRANSLATE_PERCENT;
+        
+        // Limit to max of 1.0 (100% throttle)
+        if (boosted_throttle > 1.0f) boosted_throttle = 1.0f;
+        
+        // Calculate the boosted pulse width
+        int boosted_pulse = 1500 + (boosted_throttle * 500);
+        
+        // Use the higher of the two values (original throttle or boosted)
+        pulse_width = (boosted_pulse > current_throttle_pulse) ? boosted_pulse : current_throttle_pulse;
       }
       else {
         // Normal spinning (no translation) - use throttle directly
@@ -170,8 +183,11 @@ void motor_on(float throttle_percent, int motor_pin, bool is_translating) {
     // Debug pulse width calculation
     if (millis() - last_debug > 500) {
       if (is_translating) {
-        debug_printf("MOTOR", "Translation mode - Input throttle: %.2f%%, SERVO_PWM_TRANSLATE_PERCENT: %.2f%%, Output PWM: %d μs", 
-                    throttle_percent * 100, SERVO_PWM_TRANSLATE_PERCENT * 100, pulse_width);
+        float boosted_throttle = throttle_percent * SERVO_PWM_TRANSLATE_PERCENT;
+        if (boosted_throttle > 1.0f) boosted_throttle = 1.0f;
+        
+        debug_printf("MOTOR", "Translation mode - Input throttle: %.2f%%, Boosted: %.2f%%, Output PWM: %d μs", 
+                    throttle_percent * 100, boosted_throttle * 100, pulse_width);
       } else {
         debug_printf("MOTOR", "Spin mode - Input throttle: %.2f%%, Output PWM: %d μs", 
                     throttle_percent * 100, pulse_width);

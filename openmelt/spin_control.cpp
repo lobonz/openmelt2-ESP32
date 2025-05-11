@@ -308,29 +308,34 @@ void spin_one_rotation(void) {
 
     // Check if we're under the minimum RPM for translation
     bool spin_up_mode = (melty_parameters.rotation_interval_us > MAX_TRANSLATION_ROTATION_INTERVAL_US);
-
-    // Handle simple spinning (not translating)
-    // This happens either when the stick is centered or when RPM is too low for translation
-    if (spin_up_mode || melty_parameters.translate_forback == RC_FORBACK_NEUTRAL) {
-      // For simple spinning, just keep both motors on at user's throttle level
+    
+    // Check if we're actually translating (forward or backward)
+    // Note that NEUTRAL is *not* considered translating - it alternates cycles to produce no net movement
+    bool is_translating = (melty_parameters.translate_forback == RC_FORBACK_FORWARD || 
+                           melty_parameters.translate_forback == RC_FORBACK_BACKWARD);
+    
+    // If we're in spin-up mode OR explicitly not translating, use direct throttle instead of translation
+    if (spin_up_mode || !is_translating) {
+      // For non-translating operation, just keep both motors on at user's throttle level
       // Note: is_translating is FALSE here - using direct throttle control
       motor_1_on(melty_parameters.throttle_percent, false);
       motor_2_on(melty_parameters.throttle_percent, false);
+      
+      // The critical part: we still let rotation_interval_ms be affected by left-right input
+      // This changes the tracked heading and allows steering even in simple spin mode
 
       // Skip the translation code since we're handling motors directly
       goto update_led;
     }
 
-    //if translation direction is RC_FORBACK_NEUTRAL - robot cycles between forward and reverse translation for net zero translation
     //if motor 2 (or motor 1) is not present - control sequence remains identical (signal still generated for non-connected motor)
 
     //translate forward
-    if (melty_parameters.translate_forback == RC_FORBACK_FORWARD || (melty_parameters.translate_forback == RC_FORBACK_NEUTRAL && cycle_count % 2 == 0)) {
+    if (melty_parameters.translate_forback == RC_FORBACK_FORWARD) {
       translate_forward(melty_parameters, time_spent_this_rotation_us);
     }
-
     //translate backward
-    if (melty_parameters.translate_forback == RC_FORBACK_BACKWARD || (melty_parameters.translate_forback == RC_FORBACK_NEUTRAL && cycle_count % 2 == 1)) {
+    else if (melty_parameters.translate_forback == RC_FORBACK_BACKWARD) {
       translate_backward(melty_parameters, time_spent_this_rotation_us);
     }
 

@@ -13,7 +13,7 @@
 
 //----------EEPROM----------
 #define ENABLE_EEPROM_STORAGE                     //Comment out this to disable EEPROM (for ARM)
-#define EEPROM_WRITTEN_SENTINEL_VALUE 42          //Changing this value will cause existing EEPROM values to be invalidated (revert to defaults)
+#define EEPROM_WRITTEN_SENTINEL_VALUE 41          //Changing this value will cause existing EEPROM values to be invalidated (revert to defaults)
 
 //----------TRANSLATIONAL DRIFT SETTINGS----------
 //"DEFAULT" values are overriden by interactive config / stored in EEPROM (interactive config will be easier if they are about correct)
@@ -28,7 +28,7 @@
 
 #define LEFT_RIGHT_HEADING_CONTROL_DIVISOR 1.5f   //How quick steering is (larger values = slower)
 
-#define MIN_TRANSLATION_RPM 250                   //full power spin in below this number (increasing can reduce spin-up time)
+#define MIN_TRANSLATION_RPM 375                   //full power spin in below this number (increasing can reduce spin-up time)
 
 //----------RGB LED CONFIGURATION----------
 #define USE_RGB_LED true                         // Set to true to use RGB LED, false for standard LED
@@ -121,13 +121,13 @@ enum throttle_modes {
 // 2. ESC should emit initialization tones (usually 1-3 tones)
 // 3. After initialization, the ESC is ready to accept throttle commands
 
-#define SET_SERVO_PWM_COAST_PERCENT 0.9f         // Set to a value between 0.0-1.0 to make coast use a % of current throttle
+#define SET_SERVO_PWM_COAST_PERCENT 0.95f         // Set to a value between 0.0-1.0 to make coast use a % of current throttle
                                                  // 0.0 = neutral position (1500μs), 0.5 = 50% of current throttle
                                                  // Helps prevent voltage spikes when using damped mode in ESCs
 
-#define SERVO_PWM_TRANSLATE_PERCENT 1.0f         // Sets "on" portion of rotation to this % of max throttle (2000μs)
-                                                 // 1.0 = 100% (2000μs), 0.5 = 50% (1750μs)
-                                                 // Overrides user throttle input during powered phase
+#define SERVO_PWM_TRANSLATE_PERCENT 1.05f         // Multiplier for throttle during translational movement
+                                                 // 1.0 = no change, 1.1 = 10% boost, 1.5 = 50% boost
+                                                 // Will never exceed 100% throttle and never be less than current throttle
 
 #define DYNAMIC_PWM_MOTOR_ON_PORTION 0.5f       //if defined (and DYNAMIC_PWM_THROTTLE is set) portion of each rotation motor is on is fixed at this value
 
