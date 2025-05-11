@@ -158,36 +158,20 @@ void motor_on(float throttle_percent, int motor_pin, bool is_translating) {
         pulse_width = 1500 + (throttle_percent * 500);
       } 
       else if (is_translating) {
-        // Translational movement - calculate boosted throttle for the "on" phase
-        // First calculate the current throttle pulse width
-        int current_throttle_pulse = 1500 + (throttle_percent * 500);
-        
-        // Apply SERVO_PWM_TRANSLATE_PERCENT as a multiplier to the throttle percentage
-        float boosted_throttle = throttle_percent * SERVO_PWM_TRANSLATE_PERCENT;
-        
-        // Limit to max of 1.0 (100% throttle)
-        if (boosted_throttle > 1.0f) boosted_throttle = 1.0f;
-        
-        // Calculate the boosted pulse width
-        int boosted_pulse = 1500 + (boosted_throttle * 500);
-        
-        // Use the higher of the two values (original throttle or boosted)
-        pulse_width = (boosted_pulse > current_throttle_pulse) ? boosted_pulse : current_throttle_pulse;
+        // Translational movement - use the fixed translate percentage
+        pulse_width = 1500 + (SERVO_PWM_TRANSLATE_PERCENT * 500);
       }
       else {
         // Normal spinning (no translation) - use throttle directly
-        pulse_width = 1500 + (throttle_percent * 500);
+      pulse_width = 1500 + (throttle_percent * 500);
       }
     }
     
     // Debug pulse width calculation
     if (millis() - last_debug > 500) {
       if (is_translating) {
-        float boosted_throttle = throttle_percent * SERVO_PWM_TRANSLATE_PERCENT;
-        if (boosted_throttle > 1.0f) boosted_throttle = 1.0f;
-        
-        debug_printf("MOTOR", "Translation mode - Input throttle: %.2f%%, Boosted: %.2f%%, Output PWM: %d μs", 
-                    throttle_percent * 100, boosted_throttle * 100, pulse_width);
+        debug_printf("MOTOR", "Translation mode - Input throttle: %.2f%%, SERVO_PWM_TRANSLATE_PERCENT: %.2f%%, Output PWM: %d μs", 
+                    throttle_percent * 100, SERVO_PWM_TRANSLATE_PERCENT * 100, pulse_width);
       } else {
         debug_printf("MOTOR", "Spin mode - Input throttle: %.2f%%, Output PWM: %d μs", 
                     throttle_percent * 100, pulse_width);
@@ -224,8 +208,8 @@ void motor_coast(int motor_pin) {
     if (motor_pin == MOTOR_PIN1) {
       if (SET_SERVO_PWM_COAST_PERCENT <= 0.0f) {
         // Use neutral (1500μs) if coast percent is zero
-        current_motor1_pulse_width = 1500;
-        motor1_servo.writeMicroseconds(1500);
+      current_motor1_pulse_width = 1500;
+      motor1_servo.writeMicroseconds(1500);
       } else {
         // Calculate pulse width as a percentage of the current throttle
         int pulse_width = 1500;
@@ -237,8 +221,8 @@ void motor_coast(int motor_pin) {
     } else if (motor_pin == MOTOR_PIN2) {
       if (SET_SERVO_PWM_COAST_PERCENT <= 0.0f) {
         // Use neutral (1500μs) if coast percent is zero
-        current_motor2_pulse_width = 1500;
-        motor2_servo.writeMicroseconds(1500);
+      current_motor2_pulse_width = 1500;
+      motor2_servo.writeMicroseconds(1500);
       } else {
         // Calculate pulse width as a percentage of the current throttle
         int pulse_width = 1500;
