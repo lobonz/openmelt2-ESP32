@@ -324,4 +324,17 @@ void add_telemetry_data(const char* label, const String& value) {
   strncat(telemetry_data, buffer, sizeof(telemetry_data) - strlen(telemetry_data) - 1);
   strncat(telemetry_data, "  ", sizeof(telemetry_data) - strlen(telemetry_data) - 1);
   portEXIT_CRITICAL(&debugMux);
+}
+
+// String-safe versions of debug_print that accept Arduino String objects
+void debug_print_safe(const char* module, const String& message) {
+  debug_print(module, message.c_str());
+}
+
+void debug_print_safe(const String& module, const String& message) {
+  debug_print(module.c_str(), message.c_str());
+}
+
+void debug_print_safe(const String& module, const char* message) {
+  debug_print(module.c_str(), message);
 } 

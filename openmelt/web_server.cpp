@@ -4,7 +4,6 @@
 #include "melty_config.h"
 #include <WiFi.h>
 #include <WebServer.h>
-#include <DNSServer.h>
 #include <Arduino.h>
 
 // External declarations
@@ -16,7 +15,6 @@ extern const char* password;  // WiFi password from openmelt.ino
 
 // Configuration
 #define WEB_SERVER_TASK_STACK_SIZE 16384
-#define DNS_PORT 53
 #define UPDATE_INTERVAL_MS 250
 
 // Buffers for data
@@ -26,9 +24,8 @@ char webLogBuffer[2048] = "";
 // Mutex for protecting access to the data
 portMUX_TYPE webDataMux = portMUX_INITIALIZER_UNLOCKED;
 
-// Web and DNS servers
+// Web server
 WebServer webServer(80);
-DNSServer dnsServer;
 
 // Flag indicating if the server is running
 volatile bool server_running = false;
@@ -565,25 +562,10 @@ void handleEEPROM() {
   webServer.send(200, "application/json", jsonResult);
 }
 
-// Handler for captive portal - redirect all unhandled requests to the root page
+// Handle 404 - Just serve the main page instead
 void handleNotFound() {
-  // For captive portal functionality - send Apple and Android specific headers
-  if (webServer.hostHeader() != WiFi.softAPIP().toString()) {
-    // Special headers for captive portal detection
-    webServer.sendHeader("Location", String("http://") + WiFi.softAPIP().toString(), true);
-    
-    // Captive portal detection headers for various devices
-    webServer.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-    webServer.sendHeader("Pragma", "no-cache");
-    webServer.sendHeader("Expires", "-1");
-    
-    webServer.send(302, "text/plain", ""); // 302 Redirect
-    debug_print("WEB", "Captive portal redirect to root page");
-  } else {
-    // If they're already at our IP but requested an unknown URI,
-    // just serve the main page
-    handleRoot();
-  }
+  handleRoot();
+  debug_print("WEB", "Unknown URI requested - serving main page");
 }
 
 // Parse telemetry data string into JSON format
@@ -700,11 +682,15 @@ void web_server_task(void *parameter) {
   WiFi.setTxPower(WIFI_POWER_MINUS_1dBm);
   
   // Configure access point
+  String wifiMsg = "Setting up WiFi access point: " + String(ssid);
+  debug_print_safe("WEB", wifiMsg);
+  
+  WiFi.mode(WIFI_AP);
   WiFi.softAP(ssid, password);
   IPAddress myIP = WiFi.softAPIP();
   
-  // Set up DNS server to catch all domains
-  dnsServer.start(DNS_PORT, "*", myIP);
+  String ipMsg = "Web server started with IP: " + myIP.toString();
+  debug_print_safe("WEB", ipMsg);
   
   // Set up web server handlers
   webServer.on("/", HTTP_GET, handleRoot);
@@ -713,27 +699,19 @@ void web_server_task(void *parameter) {
   webServer.on("/clear", HTTP_POST, handleClear);
   webServer.on("/eeprom", HTTP_GET, handleEEPROM);
   
-  // Special captive portal detection handlers for various devices
-  webServer.on("/generate_204", HTTP_GET, handleRoot);  // Android captive portal detection
-  webServer.on("/connecttest.txt", HTTP_GET, handleRoot); // Microsoft captive portal detection
-  webServer.on("/redirect", HTTP_GET, handleRoot); // Microsoft redirect
-  webServer.on("/hotspot-detect.html", HTTP_GET, handleRoot); // Apple captive portal detection
-  webServer.on("/success.txt", HTTP_GET, handleRoot); // Various captive portal tests
-  webServer.on("/ncsi.txt", HTTP_GET, handleRoot); // Windows NCSI detection
-  
-  // Catch-all handler for any other requests
+  // Serve main page for any requested path
   webServer.onNotFound(handleNotFound);
   
   // Start the server
   webServer.begin();
   server_running = true;
   
-  debug_print("WEB", "Web server started");
+  String readyMsg = "Web interface is ready at http://" + myIP.toString();
+  debug_print_safe("WEB", readyMsg);
   
   // Main loop for the web server task
   while (true) {
-    // Process DNS and web server requests
-    dnsServer.processNextRequest();
+    // Process web server requests
     webServer.handleClient();
     
     // Small delay to avoid hogging CPU

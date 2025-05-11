@@ -35,6 +35,11 @@ debug_printf("MODULE", "Value: %d, Status: %s", value, status);
 debug_print_level(DEBUG_WARNING, "MODULE", "Warning message");
 debug_print_level(DEBUG_ERROR, "MODULE", "Error message");
 
+// String-safe debug functions (no need to call .c_str())
+debug_print_safe("MODULE", "Message with " + String(value) + " embedded");
+debug_print_safe(String("MODULE"), String("Both module and message as String objects"));
+debug_print_safe(String("MODULE"), "String module with char* message");
+
 // Access all current debug data as a string
 String debugData = get_debug_data();
 ```

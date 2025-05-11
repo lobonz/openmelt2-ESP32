@@ -22,6 +22,11 @@ void init_debug_handler();
 void debug_print(const char* module, const char* message);
 void debug_printf(const char* module, const char* format, ...);
 
+// String-safe versions that accept Arduino String objects
+void debug_print_safe(const char* module, const String& message);
+void debug_print_safe(const String& module, const String& message);
+void debug_print_safe(const String& module, const char* message);
+
 // Add a debug message with a level
 void debug_print_level(DebugLevel level, const char* module, const char* message);
 void debug_printf_level(DebugLevel level, const char* module, const char* format, ...);

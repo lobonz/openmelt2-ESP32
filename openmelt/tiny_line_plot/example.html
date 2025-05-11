@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>TinyLinePlot Example</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .container {
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      color: #333;
+    }
+
+    button {
+      padding: 8px 16px;
+      background-color: #3366CC;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-right: 10px;
+      margin-bottom: 10px;
+    }
+
+    button:hover {
+      background-color: #254e9c;
+    }
+
+    button:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
+
+    button.active {
+      background-color: #66CC66;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .controls button {
+      padding: 5px 12px;
+      margin-right: 5px;
+    }
+
+    .controls input[type="range"] {
+      margin: 0 10px;
+      width: 250px;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>TinyLinePlot Example</h1>
+
+  <div class="container">
+    <h3>Basic Line Plot</h3>
+    <canvas id="plot1"></canvas>
+  </div>
+
+  <div class="container">
+    <h3>Multi-line Plot with Grid</h3>
+    <canvas id="plot2"></canvas>
+  </div>
+
+  <div class="container">
+    <h3>Streaming Data Plot with History</h3>
+    <div class="controls">
+      <button id="startStreamBtn">Start Streaming</button>
+      <button id="stopStreamBtn">Stop Streaming</button>
+      <button id="clearStreamBtn">Clear Data</button>
+      <button id="toggleAutoScrollBtn" class="active">Auto-scroll</button>
+    </div>
+    <div class="controls">
+      <button id="scrollStartBtn">&lt;&lt;</button>
+      <button id="scrollLeftBtn">&lt;</button>
+      <input type="range" id="scrollSlider" min="0" max="0" value="0">
+      <button id="scrollRightBtn">&gt;</button>
+      <button id="scrollEndBtn">&gt;&gt;</button>
+      <span id="scrollInfo">No data</span>
+    </div>
+    <canvas id="streamPlot"></canvas>
+  </div>
+
+  <script src="TinyLinePlot.js"></script>
+  <script>
+    // Example 1: Basic line plot
+    const plot1 = new TinyLinePlot('plot1', {
+      width: 400,
+      height: 250,
+      xLabel: 'Time (s)',
+      yLabel: 'Temperature (°C)',
+      title: 'Sensor Reading',
+      lineColors: ['#ff6b6b']
+    });
+
+    // Generate some sample data
+    const data1 = [];
+    for (let i = 0; i < 30; i++) {
+      data1.push({
+        x: i * 0.5,
+        y: 25 + Math.sin(i * 0.3) * 5 + Math.random() * 1.5
+      });
+    }
+
+    // Add dataset and draw
+    plot1.addDataset(data1, 'Sensor 1').draw();
+
+    // Example 2: Multi-line plot with more options
+    const plot2 = new TinyLinePlot('plot2', {
+      width: 500,
+      height: 300,
+      padding: 40,
+      xLabel: 'Time (s)',
+      yLabel: 'Values',
+      title: 'Multi-sensor Reading',
+      showGrid: true,
+      lineWidth: 2,
+      dotSize: 3
+    });
+
+    // Generate multiple datasets
+    const data2 = [];
+    const data3 = [];
+    const data4 = [];
+
+    for (let i = 0; i < 20; i++) {
+      const x = i * 0.5;
+      data2.push({ x, y: 50 + Math.sin(i * 0.4) * 20 });
+      data3.push({ x, y: 30 + Math.cos(i * 0.3) * 15 });
+      data4.push({ x, y: 70 - Math.sin(i * 0.5) * 10 });
+    }
+
+    // Add multiple datasets and draw
+    plot2
+      .addDataset(data2, 'Temperature')
+      .addDataset(data3, 'Humidity')
+      .addDataset(data4, 'Pressure')
+      .draw();
+
+    // Example 3: Streaming data plot with history retention
+    const streamPlot = new TinyLinePlot('streamPlot', {
+      width: 600,
+      height: 300,
+      padding: 40,
+      xLabel: 'Time (s)',
+      yLabel: 'Sensor Value',
+      title: 'Live Sensor Data with History',
+      showGrid: true,
+      lineWidth: 2,
+      dotSize: 2,
+      viewWindowSize: 50,
+      streaming: true,
+      retainData: true,
+      autoScrollWithNewData: true
+    });
+
+    // Initialize with empty datasets
+    const temperatureData = [];
+    const humidityData = [];
+
+    streamPlot
+      .addDataset(temperatureData, 'Temperature')
+      .addDataset(humidityData, 'Humidity')
+      .draw();
+
+    let streamInterval;
+    let timeCounter = 0;
+
+    // Stream data function
+    function addStreamData () {
+      // Add a new data point to each dataset
+      streamPlot.addPoint(0, {
+        x: timeCounter,
+        y: 25 + Math.sin(timeCounter * 0.2) * 10 + Math.random() * 2
+      });
+
+      streamPlot.addPoint(1, {
+        x: timeCounter,
+        y: 50 + Math.cos(timeCounter * 0.1) * 15 + Math.random() * 3
+      });
+
+      // Redraw the plot
+      streamPlot.draw();
+
+      // Update scroll controls
+      updateScrollControls();
+
+      timeCounter += 0.5;
+    }
+
+    // Function to update scroll controls state
+    function updateScrollControls () {
+      const dataLength = streamPlot.getDataLength();
+      const windowSize = streamPlot.viewWindow.size;
+      const maxScroll = Math.max(0, dataLength - windowSize);
+
+      const slider = document.getElementById('scrollSlider');
+      slider.max = maxScroll;
+      slider.value = streamPlot.viewWindow.start;
+
+      const info = document.getElementById('scrollInfo');
+      if (dataLength > 0) {
+        const autoScrollText = streamPlot.autoScroll ? ' (Auto-scroll ON)' : '';
+        info.textContent = `Showing ${streamPlot.viewWindow.start + 1} - ${Math.min(streamPlot.viewWindow.start + windowSize, dataLength)} of ${dataLength} points${autoScrollText}`;
+      } else {
+        info.textContent = 'No data';
+      }
+
+      // Disable controls if not enough data
+      const hasEnoughData = dataLength > windowSize;
+      document.getElementById('scrollStartBtn').disabled = !hasEnoughData;
+      document.getElementById('scrollLeftBtn').disabled = !hasEnoughData;
+      document.getElementById('scrollRightBtn').disabled = !hasEnoughData;
+      document.getElementById('scrollEndBtn').disabled = !hasEnoughData;
+      slider.disabled = !hasEnoughData;
+
+      // Update auto-scroll button state
+      const autoScrollBtn = document.getElementById('toggleAutoScrollBtn');
+      if (streamPlot.autoScroll) {
+        autoScrollBtn.classList.add('active');
+      } else {
+        autoScrollBtn.classList.remove('active');
+      }
+    }
+
+    // Button event handlers
+    document.getElementById('startStreamBtn').addEventListener('click', function () {
+      if (!streamInterval) {
+        streamInterval = setInterval(addStreamData, 500);
+      }
+    });
+
+    document.getElementById('stopStreamBtn').addEventListener('click', function () {
+      if (streamInterval) {
+        clearInterval(streamInterval);
+        streamInterval = null;
+      }
+    });
+
+    document.getElementById('clearStreamBtn').addEventListener('click', function () {
+      streamPlot.clear();
+      streamPlot
+        .addDataset([], 'Temperature')
+        .addDataset([], 'Humidity')
+        .draw();
+      timeCounter = 0;
+      updateScrollControls();
+    });
+
+    // Toggle auto-scroll button
+    document.getElementById('toggleAutoScrollBtn').addEventListener('click', function () {
+      streamPlot.toggleAutoScroll().draw();
+      updateScrollControls();
+    });
+
+    // Scroll control event handlers
+    document.getElementById('scrollStartBtn').addEventListener('click', function () {
+      streamPlot.scrollToStart().draw();
+      updateScrollControls();
+    });
+
+    document.getElementById('scrollLeftBtn').addEventListener('click', function () {
+      streamPlot.scroll(-10).draw();
+      updateScrollControls();
+    });
+
+    document.getElementById('scrollRightBtn').addEventListener('click', function () {
+      streamPlot.scroll(10).draw();
+      updateScrollControls();
+    });
+
+    document.getElementById('scrollEndBtn').addEventListener('click', function () {
+      streamPlot.scrollToEnd().draw();
+      updateScrollControls();
+    });
+
+    document.getElementById('scrollSlider').addEventListener('input', function () {
+      streamPlot.scrollTo(parseInt(this.value)).draw();
+      updateScrollControls();
+    });
+
+    // Initialize controls
+    updateScrollControls();
+  </script>
+</body>
+
+</html>
