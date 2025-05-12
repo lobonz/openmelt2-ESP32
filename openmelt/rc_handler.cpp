@@ -4,6 +4,7 @@
 #include "arduino.h"
 #include "melty_config.h"
 #include "debug_handler.h"
+#include <math.h>  // For sqrt function
 
 #define RC_DATA_UNLOCKED 0
 #define RC_DATA_LOCKED 1 
@@ -190,6 +191,40 @@ int rc_get_forback() {
   unlock_rc_data();
   
   return pulse_length - CENTER_FORBACK_PULSE_LENGTH;
+}
+
+//returns translation percentage (0-1) based on distance from center position
+//combines both left/right and forward/backward axes using Pythagorean theorem
+float rc_get_translation_percent() {
+  // Get the offsets for both axes
+  int lr_offset = rc_get_leftright();
+  int fb_offset = rc_get_forback();
+  
+  // Calculate the distance from center using Pythagorean theorem
+  float distance = sqrt(lr_offset * lr_offset + fb_offset * fb_offset);
+  
+  // Define deadzone and max values
+  const float MIN_TRANSLATION_DISTANCE = 50.0;  // Deadzone for center stick position
+  const float MAX_TRANSLATION_DISTANCE = 450.0; // Distance at which we want 100% translation
+  
+  // Debug output every 1000ms
+  static unsigned long last_debug = 0;
+  if (millis() - last_debug > 1000) {
+    debug_printf("RC", "Translation calculation: Distance=%0.1f, Min=%0.1f, Max=%0.1f", 
+                distance, MIN_TRANSLATION_DISTANCE, MAX_TRANSLATION_DISTANCE);
+    last_debug = millis();
+  }
+  
+  // Check if we're in the center deadzone
+  if (distance <= MIN_TRANSLATION_DISTANCE) return 0.0;
+  
+  // Check if we're at or beyond max (100%)
+  if (distance >= MAX_TRANSLATION_DISTANCE) return 1.0;
+  
+  // Scale linearly between deadzone and max
+  float percent = (distance - MIN_TRANSLATION_DISTANCE) / (MAX_TRANSLATION_DISTANCE - MIN_TRANSLATION_DISTANCE);
+  
+  return percent;
 }
 
 //ISRs for each RC interrupt pin

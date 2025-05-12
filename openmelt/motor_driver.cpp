@@ -4,6 +4,7 @@
 #include "melty_config.h"
 #include "motor_driver.h"
 #include "debug_handler.h"
+#include "rc_handler.h"  // Include for rc_get_translation_percent()
 #include <ESP32Servo.h>  // Using ESP32-specific servo library
 
 // Servo objects for ESC control when using SERVO_PWM_THROTTLE
@@ -158,8 +159,11 @@ void motor_on(float throttle_percent, int motor_pin, bool is_translating) {
         pulse_width = 1500 + (throttle_percent * 500);
       } 
       else if (is_translating) {
-        // Translational movement - use the fixed translate percentage
-        pulse_width = 1500 + (SERVO_PWM_TRANSLATE_PERCENT * 500);
+        // Translational movement - scale by steering stick position
+        float translation_scale = rc_get_translation_percent();
+        // Only scale the portion above 1.0 since 1.0 is neutral
+        float scaled_translate_percent = 1.0 + ((SERVO_PWM_TRANSLATE_PERCENT - 1.0) * translation_scale);
+        pulse_width = 1500 + (scaled_translate_percent * 500);
       }
       else {
         // Normal spinning (no translation) - use throttle directly
@@ -170,8 +174,12 @@ void motor_on(float throttle_percent, int motor_pin, bool is_translating) {
     // Debug pulse width calculation
     if (millis() - last_debug > 500) {
       if (is_translating) {
-        debug_printf("MOTOR", "Translation mode - Input throttle: %.2f%%, SERVO_PWM_TRANSLATE_PERCENT: %.2f%%, Output PWM: %d μs", 
-                    throttle_percent * 100, SERVO_PWM_TRANSLATE_PERCENT * 100, pulse_width);
+        float translation_scale = rc_get_translation_percent();
+        // Only scale the portion above 1.0 since 1.0 is neutral
+        float scaled_translate_percent = 1.0 + ((SERVO_PWM_TRANSLATE_PERCENT - 1.0) * translation_scale);
+        debug_printf("MOTOR", "Translation mode - Input throttle: %.2f%%, Scale: %.2f, SERVO_PWM_TRANSLATE_PERCENT: %.2f, Scaled: %.2f, Output PWM: %d μs", 
+                    throttle_percent * 100, translation_scale, SERVO_PWM_TRANSLATE_PERCENT, 
+                    scaled_translate_percent, pulse_width);
       } else {
         debug_printf("MOTOR", "Spin mode - Input throttle: %.2f%%, Output PWM: %d μs", 
                     throttle_percent * 100, pulse_width);
@@ -204,30 +212,52 @@ void motor_coast(int motor_pin) {
     digitalWrite(motor_pin, LOW);  //same as "off" for brushed motors
   }
   if (THROTTLE_TYPE == SERVO_PWM_THROTTLE) {
-    // For bi-directional ESCs, handle coast mode based on SET_SERVO_PWM_COAST_PERCENT
+    // Get the translation percentage scaling factor
+    float translation_scale = rc_get_translation_percent();
+    
+    // For bi-directional ESCs, handle coast mode based on SERVO_PWM_COAST_PERCENT
     if (motor_pin == MOTOR_PIN1) {
-      if (SET_SERVO_PWM_COAST_PERCENT <= 0.0f) {
+      if (SERVO_PWM_COAST_PERCENT <= 0.0f) {
         // Use neutral (1500μs) if coast percent is zero
-      current_motor1_pulse_width = 1500;
-      motor1_servo.writeMicroseconds(1500);
+        current_motor1_pulse_width = 1500;
+        motor1_servo.writeMicroseconds(1500);
       } else {
+        // Scale the coast percentage based on translation
+        // At translation_scale = 0: Use 1.0 (no coasting)
+        // At translation_scale = 1: Use SERVO_PWM_COAST_PERCENT (max coasting)
+        float scaled_coast_percent = 1.0 * (1.0 - translation_scale) + (SERVO_PWM_COAST_PERCENT * translation_scale);
+        
         // Calculate pulse width as a percentage of the current throttle
         int pulse_width = 1500;
         int throttle_range = current_motor1_pulse_width - 1500;
-        pulse_width = 1500 + (throttle_range * SET_SERVO_PWM_COAST_PERCENT);
+        pulse_width = 1500 + (throttle_range * scaled_coast_percent);
+        
+        // Debug output every 500ms
+        static unsigned long last_debug = 0;
+        if (millis() - last_debug > 500) {
+          debug_printf("MOTOR", "Coast mode - Scale: %.2f, Original Coast: %.2f, Scaled Coast: %.2f, PWM: %d μs", 
+                     translation_scale, SERVO_PWM_COAST_PERCENT, scaled_coast_percent, pulse_width);
+          last_debug = millis();
+        }
+        
         current_motor1_pulse_width = pulse_width;
         motor1_servo.writeMicroseconds(pulse_width);
       }
     } else if (motor_pin == MOTOR_PIN2) {
-      if (SET_SERVO_PWM_COAST_PERCENT <= 0.0f) {
+      if (SERVO_PWM_COAST_PERCENT <= 0.0f) {
         // Use neutral (1500μs) if coast percent is zero
-      current_motor2_pulse_width = 1500;
-      motor2_servo.writeMicroseconds(1500);
+        current_motor2_pulse_width = 1500;
+        motor2_servo.writeMicroseconds(1500);
       } else {
+        // Scale the coast percentage based on translation
+        // At translation_scale = 0: Use 1.0 (no coasting)
+        // At translation_scale = 1: Use SERVO_PWM_COAST_PERCENT (max coasting)
+        float scaled_coast_percent = 1.0 * (1.0 - translation_scale) + (SERVO_PWM_COAST_PERCENT * translation_scale);
+        
         // Calculate pulse width as a percentage of the current throttle
         int pulse_width = 1500;
         int throttle_range = current_motor2_pulse_width - 1500;
-        pulse_width = 1500 + (throttle_range * SET_SERVO_PWM_COAST_PERCENT);
+        pulse_width = 1500 + (throttle_range * scaled_coast_percent);
         current_motor2_pulse_width = pulse_width;
         motor2_servo.writeMicroseconds(pulse_width);
       }
