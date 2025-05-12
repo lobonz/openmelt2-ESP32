@@ -26,7 +26,7 @@
                                                   //Just enterring and exiting config mode will automatically set this value / save to EEPROM (based on current accel reading reflecting 0g)
                                                   //For small-radius bots - try changing to H3LIS331 to +/-200g range for improved accuracy (accel_handler.h)
 
-#define LEFT_RIGHT_HEADING_CONTROL_DIVISOR 1.5f   //How quick steering is (larger values = slower)
+#define LEFT_RIGHT_HEADING_CONTROL_DIVISOR 1.1f   //How quick steering is (larger values = slower)
 
 #define MIN_TRANSLATION_RPM 250                   //full power spin in below this number (increasing can reduce spin-up time)
 
