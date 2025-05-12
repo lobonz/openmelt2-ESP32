@@ -176,7 +176,7 @@ static struct melty_parameters_t get_melty_parameters(void) {
   if (led_on_portion < 0.10f) led_on_portion = 0.10f;
   if (led_on_portion > 0.90f) led_on_portion = 0.90f;
 
-  melty_parameters.translate_forback = rc_get_forback();
+  melty_parameters.translate_forback = rc_get_forback_enum();
 
   //if we are in config mode - handle it (and disable steering if needed)
   if (get_config_mode() == true) {

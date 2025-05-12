@@ -249,7 +249,7 @@ void update_standard_diagnostics() {
   snprintf(buffer, sizeof(buffer), "RC L/R: %d  ", rc_get_leftright());
   strncat(newTelemetry, buffer, sizeof(newTelemetry) - strlen(newTelemetry) - 1);
   
-  snprintf(buffer, sizeof(buffer), "RC F/B: %d  ", rc_get_forback());
+  snprintf(buffer, sizeof(buffer), "RC F/B: %d  ", rc_get_forback_enum());
   strncat(newTelemetry, buffer, sizeof(newTelemetry) - strlen(newTelemetry) - 1);
   
   // Add motor PWM values if using servo PWM throttle

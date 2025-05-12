@@ -174,10 +174,10 @@ static void echo_diagnostics() {
 //Used to flash out max recorded RPM 100's of RPMs
 static void display_rpm_if_requested() {
   //triggered by user pushing throttle up while bot is at idle for 750ms
-  if (rc_get_forback() == RC_FORBACK_FORWARD) {
+  if (rc_get_forback_enum() == RC_FORBACK_FORWARD) {
     delay(750);
      //verify throttle at zero to prevent accidental entry into RPM flash
-    if (rc_get_forback() == RC_FORBACK_FORWARD && rc_get_throttle_percent() == 0) {
+    if (rc_get_forback_enum() == RC_FORBACK_FORWARD && rc_get_throttle_percent() == 0) {
        
       //throttle up cancels RPM count
       for (int x = 0; x < get_max_rpm() && rc_get_throttle_percent() == 0; x = x + 100) {
@@ -193,14 +193,14 @@ static void display_rpm_if_requested() {
 //checks if user has requested to enter / exit config mode
 static void check_config_mode() {
   //if user pulls control stick back for 750ms - enters (or exits) interactive configuration mode
-  if (rc_get_forback() == RC_FORBACK_BACKWARD) {
+  if (rc_get_forback_enum() == RC_FORBACK_BACKWARD) {
     delay(750);
-    if (rc_get_forback() == RC_FORBACK_BACKWARD) {
+    if (rc_get_forback_enum() == RC_FORBACK_BACKWARD) {
       toggle_config_mode(); 
       if (get_config_mode() == false) save_melty_config_settings();    //save melty settings on config mode exit
       
       //wait for user to release stick - so we don't re-toggle modes
-      while (rc_get_forback() == RC_FORBACK_BACKWARD) {
+      while (rc_get_forback_enum() == RC_FORBACK_BACKWARD) {
         service_watchdog();
       }
     }

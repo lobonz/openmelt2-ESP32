@@ -158,7 +158,7 @@ bool rc_get_is_lr_in_normal_deadzone() {
 
 
 //returns RC_FORBACK_FORWARD, RC_FORBACK_BACKWARD or RC_FORBACK_NEUTRAL based on stick position
-rc_forback rc_get_forback() {
+rc_forback_enum rc_get_forback_enum() {
   
   lock_rc_data();
   unsigned long pulse_length = forback_rc_channel.pulse_length;
@@ -180,6 +180,16 @@ int rc_get_leftright() {
   unlock_rc_data();
 
   return pulse_length - CENTER_LEFTRIGHT_PULSE_LENGTH;
+}
+
+//returns offset in microseconds from center value for forward/backward
+//positive for forward, negative for backward, 0 for center
+int rc_get_forback() {
+  lock_rc_data();
+  unsigned long pulse_length = forback_rc_channel.pulse_length;
+  unlock_rc_data();
+  
+  return pulse_length - CENTER_FORBACK_PULSE_LENGTH;
 }
 
 //ISRs for each RC interrupt pin
