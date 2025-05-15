@@ -246,24 +246,28 @@ void loop() {
 
   service_watchdog();             //keep the watchdog happy
 
-  //if the rc signal isn't good - assure motors off - and "slow flash" LED
-  //this will interrupt a spun-up bot if the signal becomes bad
-  while (rc_signal_is_healthy() == false) {
+  // Static variables for mode switching logic
+  static bool in_normal_driving_mode = false;
+  static unsigned long last_steering_active_time = 0;
+  static unsigned long last_throttle_active_time = 0;
+
+  // Check if RC is healthy before reading values
+  if (!rc_signal_is_healthy()) {
+    // If RC signal is not healthy, ensure motors are off
     motors_off();
+    in_normal_driving_mode = false;
     
+    // Show slow flash for no signal
     heading_led_on(0); delay(30);
     heading_led_off(); delay(600);
     
     //services watchdog and echo diagnostics while we are waiting for RC signal
     service_watchdog();
     echo_diagnostics();
+    return; // Skip the rest of the loop until RC is healthy
   }
 
-  // Static variables for mode switching logic
-  static bool in_normal_driving_mode = false;
-  static unsigned long last_steering_active_time = 0;
-  static unsigned long last_throttle_active_time = 0;
-
+  // RC signal is healthy, proceed with normal operation
   // Get throttle with deadzone
   int throttle_percent = rc_get_throttle_percent();
   bool throttle_is_zero = (throttle_percent <= THROTTLE_DEADZONE_PERCENT);

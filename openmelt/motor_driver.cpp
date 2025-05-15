@@ -349,12 +349,34 @@ void motors_off() {
 }
 
 void init_motors() {
+  debug_print("MOTOR", "Initializing motor drivers...");
+  
   if (THROTTLE_TYPE == SERVO_PWM_THROTTLE) {
+    debug_print("MOTOR", "Using SERVO_PWM_THROTTLE mode");
+    
+    // First explicitly set pins as outputs for safety
+    pinMode(MOTOR_PIN1, OUTPUT);
+    pinMode(MOTOR_PIN2, OUTPUT);
+    
     // Use the arming function (without calibration)
     arm_calibrate_escs(false);
+    
+    // Double-check neutral values are set
+    debug_print("MOTOR", "Setting motors to neutral position");
+    motor1_servo.writeMicroseconds(1500);
+    motor2_servo.writeMicroseconds(1500);
+    current_motor1_pulse_width = 1500;
+    current_motor2_pulse_width = 1500;
+    
+    debug_printf("MOTOR", "Motors initialized - PWM1: %d, PWM2: %d", 
+                current_motor1_pulse_width, current_motor2_pulse_width);
   } else {
-  pinMode(MOTOR_PIN1, OUTPUT);
-  pinMode(MOTOR_PIN2, OUTPUT);
+    // For non-servo throttle types
+    debug_print("MOTOR", "Using non-servo throttle mode");
+    pinMode(MOTOR_PIN1, OUTPUT);
+    pinMode(MOTOR_PIN2, OUTPUT);
   }
+  // Ensure motors are off
   motors_off();
+  debug_print("MOTOR", "Motors set to off state");
 }

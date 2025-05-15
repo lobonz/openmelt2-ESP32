@@ -86,9 +86,26 @@ bool rc_signal_is_healthy() {
   unlock_rc_data();
   
   //initial signal not received
-  if (last_good_signal == 0) return false;
+  if (last_good_signal == 0) {
+    // Debug output every 1000ms to show we're waiting for initial signal
+    static unsigned long last_debug = 0;
+    if (millis() - last_debug > 1000) {
+      debug_print("RC", "Waiting for initial RC signal");
+      last_debug = millis();
+    }
+    return false;
+  }
 
-  if (millis() - last_good_signal > MAX_MS_BETWEEN_RC_UPDATES) return false;
+  if (millis() - last_good_signal > MAX_MS_BETWEEN_RC_UPDATES) {
+    // Debug output when signal is lost after previously being good
+    static unsigned long last_debug = 0;
+    if (millis() - last_debug > 1000) {
+      debug_printf("RC", "RC signal lost - Last good signal: %lums ago", 
+                 millis() - last_good_signal);
+      last_debug = millis();
+    }
+    return false;
+  }
   
   return true;
 }
@@ -240,6 +257,17 @@ void throttle_rc_change() {
 
 //attach interrupts to rc pins
 void init_rc(void) {
+  // Initialize RC channel pulse values to neutral/center to avoid spurious values at startup
+  forback_rc_channel.pulse_length = CENTER_FORBACK_PULSE_LENGTH;
+  leftright_rc_channel.pulse_length = CENTER_LEFTRIGHT_PULSE_LENGTH;
+  throttle_rc_channel.pulse_length = CENTER_LEFTRIGHT_PULSE_LENGTH;
+  
+  // Set pins as inputs
+  pinMode(forback_rc_channel.pin, INPUT);
+  pinMode(leftright_rc_channel.pin, INPUT);
+  pinMode(throttle_rc_channel.pin, INPUT);
+  
+  // Attach interrupts
   attachInterrupt(digitalPinToInterrupt(forback_rc_channel.pin), forback_rc_change, CHANGE);
   attachInterrupt(digitalPinToInterrupt(leftright_rc_channel.pin), leftright_rc_change, CHANGE);
   attachInterrupt(digitalPinToInterrupt(throttle_rc_channel.pin), throttle_rc_change, CHANGE);
