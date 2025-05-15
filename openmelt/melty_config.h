@@ -147,6 +147,12 @@ enum throttle_modes {
 #define LOW_BAT_REPEAT_READS_BEFORE_ALARM 20      //Requires this many ADC reads below threshold before alarming
 
 
+//----------NORMAL DRIVING MODE----------
+#define NORMAL_DRIVING_MODE_STEERING_DEADZONE 0.1    // Deadzone for steering inputs in normal driving mode (0.0-1.0)
+#define THROTTLE_DEADZONE_PERCENT 3                 // Throttle values below this are considered zero (for hysteresis)
+#define MODE_SWITCH_TIMEOUT_MS 500                   // Time in ms that steering must be below deadzone before switching modes
+
+
 //----------SAFETY----------
 #define ENABLE_WATCHDOG                           //Uses Adafruit's sleepdog to enable watchdog / reset (tested on AVR - should work for ARM https://github.com/adafruit/Adafruit_SleepyDog)
 #define WATCH_DOG_TIMEOUT_MS 5000                 //Timeout value for watchdog (increased from 2000ms for WiFi operations)

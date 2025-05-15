@@ -88,4 +88,9 @@ When the throttle is at zero (not spinning), the bot can function as a standard 
 - Push the steering stick left to turn left (left motor backward, right motor forward)
 - Push the steering stick right to turn right (left motor forward, right motor backward)
 
+The system implements smart mode switching with these configurable parameters:
+- `NORMAL_DRIVING_MODE_STEERING_DEADZONE`: Prevents drift from small steering inputs (default: 0.1)
+- `THROTTLE_DEADZONE_PERCENT`: Small throttle values that are treated as zero (default: 3%)
+- `MODE_SWITCH_TIMEOUT_MS`: Timeout before switching modes when inputs are inactive (default: 500ms)
+
 This feature makes the robot multi-purpose, allowing it to drive normally when not in melty brain mode and automatically switching back to melty brain behavior when throttle is applied.

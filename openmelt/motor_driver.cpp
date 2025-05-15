@@ -45,6 +45,10 @@ void set_direct_esc_control(bool enable) {
 void normal_driving_mode(float steering_x, float steering_y) {
   if (THROTTLE_TYPE != SERVO_PWM_THROTTLE) return;
   
+  // Apply deadzone from config
+  if (fabs(steering_x) <= NORMAL_DRIVING_MODE_STEERING_DEADZONE) steering_x = 0.0;
+  if (fabs(steering_y) <= NORMAL_DRIVING_MODE_STEERING_DEADZONE) steering_y = 0.0;
+  
   // Calculate motor values based on steering inputs
   // Left motor (motor1) and right motor (motor2)
   float left_motor = steering_y + steering_x;   // Forward+Right -> Left motor increases
@@ -57,7 +61,7 @@ void normal_driving_mode(float steering_x, float steering_y) {
   // Map from -1.0,1.0 to pulse width (1000-2000μs)
   // 1500μs is neutral, 2000μs is full forward, 1000μs is full reverse
   int left_pulse = 1500 + (left_motor * 500);
-  int right_pulse = 1500 - (right_motor * 500);
+  int right_pulse = 1500 + (right_motor * 500);
   
   // Send values to motors
   current_motor1_pulse_width = left_pulse;

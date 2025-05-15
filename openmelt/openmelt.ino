@@ -210,40 +210,18 @@ static void check_config_mode() {
 
 //handles the bot when not spinning (with RC good)
 static void handle_bot_idle() {
-    // Get steering stick values for normal driving mode
-    float steering_x = rc_get_leftright() / 450.0;  // Normalize to -1.0 to 1.0 range
-    float steering_y = rc_get_forback() / 450.0;    // Normalize to -1.0 to 1.0 range
+    // Original idle behavior
+    motors_off();               //assure motors are off
     
-    // Apply deadzone to avoid drift
-    if (fabs(steering_x) < 0.1) steering_x = 0.0;
-    if (fabs(steering_y) < 0.1) steering_y = 0.0;
-    
-    // Check if user is trying to move in normal driving mode
-    bool driving_mode_active = (fabs(steering_x) > 0.1 || fabs(steering_y) > 0.1);
-    
-    if (driving_mode_active && THROTTLE_TYPE == SERVO_PWM_THROTTLE) {
-        // Use normal driving mode
-        normal_driving_mode(steering_x, steering_y);
-        
-        // LED pattern - quick double blink for driving mode
-        heading_led_on(0); delay(20);
-        heading_led_off(); delay(80);
-        heading_led_on(0); delay(20);
-        heading_led_off(); delay(120);
-    } else {
-        // Original idle behavior
-        motors_off();               //assure motors are off
-        
-        //normal LED "fast flash" - indicates RC signal is good while sitting idle
-        heading_led_on(0); delay(30);
-        heading_led_off(); delay(120);
+    //normal LED "fast flash" - indicates RC signal is good while sitting idle
+    heading_led_on(0); delay(30);
+    heading_led_off(); delay(120);
 
-        //if in config mode blip LED again to show "double-flash" 
-        if (get_config_mode() == true) {
-            heading_led_off(); delay(400);
-            heading_led_on(0); delay(30);
-            heading_led_off(); delay(140);
-        }
+    //if in config mode blip LED again to show "double-flash" 
+    if (get_config_mode() == true) {
+        heading_led_off(); delay(400);
+        heading_led_on(0); delay(30);
+        heading_led_off(); delay(140);
     }
 
     check_config_mode();          //check if user requests we enter / exit config mode
@@ -270,12 +248,119 @@ void loop() {
     echo_diagnostics();
   }
 
-  //if RC is good - and throtte is above 0 - spin a single rotation
-  if (rc_get_throttle_percent() > 0) {
-    //this is where all the motor control happens!  (see spin_control.cpp)
-    spin_one_rotation();  
-  } else {    
-    handle_bot_idle();
+  // Static variables for mode switching logic
+  static bool in_normal_driving_mode = false;
+  static unsigned long last_steering_active_time = 0;
+  static unsigned long last_throttle_active_time = 0;
+
+  // Get throttle with deadzone
+  int throttle_percent = rc_get_throttle_percent();
+  bool throttle_is_zero = (throttle_percent <= THROTTLE_DEADZONE_PERCENT);
+  
+  // If throttle has been activated, record the time
+  if (!throttle_is_zero) {
+    last_throttle_active_time = millis();
   }
 
+  // Check if we should be in melty mode (throttle above deadzone)
+  if (!throttle_is_zero) {
+    // Switch to melty mode if throttle is active
+    in_normal_driving_mode = false;
+    //this is where all the motor control happens!  (see spin_control.cpp)
+    spin_one_rotation();  
+  } else {
+    // Throttle is zero, determine if we should be in normal driving mode or idle
+    
+    // Get steering stick values
+    float steering_x = rc_get_leftright() / 450.0;  // Normalize to -1.0 to 1.0 range
+    float steering_y = rc_get_forback() / 450.0;    // Normalize to -1.0 to 1.0 range
+    
+    // Apply deadzone
+    bool steering_x_active = (fabs(steering_x) > NORMAL_DRIVING_MODE_STEERING_DEADZONE);
+    bool steering_y_active = (fabs(steering_y) > NORMAL_DRIVING_MODE_STEERING_DEADZONE);
+    
+    // If steering is active, record the time
+    if (steering_x_active || steering_y_active) {
+      last_steering_active_time = millis();
+    }
+    
+    // Check if we are in or should switch to normal driving mode
+    unsigned long current_time = millis();
+    unsigned long steering_inactive_time = current_time - last_steering_active_time;
+    unsigned long throttle_inactive_time = current_time - last_throttle_active_time;
+    
+    // If currently in driving mode, stay in it if steering is active
+    if (in_normal_driving_mode) {
+      if (steering_x_active || steering_y_active) {
+        // Continue normal driving mode
+        if (THROTTLE_TYPE == SERVO_PWM_THROTTLE) {
+          // Zero out steering values inside deadzone for smoother control
+          if (fabs(steering_x) <= NORMAL_DRIVING_MODE_STEERING_DEADZONE) steering_x = 0.0;
+          if (fabs(steering_y) <= NORMAL_DRIVING_MODE_STEERING_DEADZONE) steering_y = 0.0;
+          
+          normal_driving_mode(steering_x, steering_y);
+          
+          // LED pattern - quick double blink for driving mode
+          heading_led_on(0); delay(20);
+          heading_led_off(); delay(80);
+          heading_led_on(0); delay(20);
+          heading_led_off(); delay(120);
+        } else {
+          // If not using servo PWM, fall back to idle mode
+          in_normal_driving_mode = false;
+          handle_bot_idle();
+        }
+      } 
+      else if (steering_inactive_time > MODE_SWITCH_TIMEOUT_MS && 
+               throttle_inactive_time > MODE_SWITCH_TIMEOUT_MS) {
+        // If steering has been inactive for the timeout period, exit driving mode
+        in_normal_driving_mode = false;
+        handle_bot_idle();
+      }
+      else {
+        // Steering is inactive but timeout hasn't elapsed, stay in driving mode
+        if (THROTTLE_TYPE == SERVO_PWM_THROTTLE) {
+          normal_driving_mode(0.0, 0.0);  // Zero inputs to stop movement
+          
+          // LED pattern - quick double blink for driving mode
+          heading_led_on(0); delay(20);
+          heading_led_off(); delay(80);
+          heading_led_on(0); delay(20);
+          heading_led_off(); delay(120);
+        } else {
+          // If not using servo PWM, fall back to idle mode
+          in_normal_driving_mode = false;
+          handle_bot_idle();
+        }
+      }
+    } 
+    else {
+      // Not in driving mode yet
+      if (steering_x_active || steering_y_active) {
+        // Steering is active, switch to driving mode
+        in_normal_driving_mode = true;
+        
+        if (THROTTLE_TYPE == SERVO_PWM_THROTTLE) {
+          // Zero out steering values inside deadzone for smoother control
+          if (fabs(steering_x) <= NORMAL_DRIVING_MODE_STEERING_DEADZONE) steering_x = 0.0;
+          if (fabs(steering_y) <= NORMAL_DRIVING_MODE_STEERING_DEADZONE) steering_y = 0.0;
+          
+          normal_driving_mode(steering_x, steering_y);
+          
+          // LED pattern - quick double blink for driving mode
+          heading_led_on(0); delay(20);
+          heading_led_off(); delay(80);
+          heading_led_on(0); delay(20);
+          heading_led_off(); delay(120);
+        } else {
+          // If not using servo PWM, fall back to idle mode
+          in_normal_driving_mode = false;
+          handle_bot_idle();
+        }
+      } else {
+        // Remain in idle mode
+        handle_bot_idle();
+      }
+    }
+  }
 }
