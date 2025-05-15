@@ -10,6 +10,7 @@ OpenMelt is an ESP32-based controller for melty brain style combat robots, featu
 - Support for ESCs using standard RC PWM signals
 - Real-time diagnostics and logging
 - User-configurable settings with persistent storage
+- Normal two-wheel driving mode when throttle is at zero
 
 ## Debug System
 
@@ -77,3 +78,14 @@ OpenMelt Config Process
 - Move the control stick to the bottom diagonal left or right to adjust heading, retest forward backward heading and repeat until correct heading.
 - Test forward backward left right - when happy its correct - spin down.
 - Pull the control stick back and hold for 1 second to exit config mode and save your settings
+
+## Normal Driving Mode
+
+When the throttle is at zero (not spinning), the bot can function as a standard two-wheeled robot:
+
+- Push the steering stick forward to drive both motors forward
+- Pull the steering stick back to drive both motors backward
+- Push the steering stick left to turn left (left motor backward, right motor forward)
+- Push the steering stick right to turn right (left motor forward, right motor backward)
+
+This feature makes the robot multi-purpose, allowing it to drive normally when not in melty brain mode and automatically switching back to melty brain behavior when throttle is applied.

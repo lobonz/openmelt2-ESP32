@@ -12,6 +12,7 @@
 #include "debug_handler.h"
 #include <WiFi.h>
 #include <WebServer.h>
+#include <math.h>  // For fabs() function used in normal driving mode
 
 // Define to enable web server diagnostics (but still allow normal operation)
 #define ENABLE_WEBSERVER
@@ -209,18 +210,40 @@ static void check_config_mode() {
 
 //handles the bot when not spinning (with RC good)
 static void handle_bot_idle() {
-
-    motors_off();               //assure motors are off
+    // Get steering stick values for normal driving mode
+    float steering_x = rc_get_leftright() / 450.0;  // Normalize to -1.0 to 1.0 range
+    float steering_y = rc_get_forback() / 450.0;    // Normalize to -1.0 to 1.0 range
     
-    //normal LED "fast flash" - indicates RC signal is good while sitting idle
-    heading_led_on(0); delay(30);
-    heading_led_off(); delay(120);
+    // Apply deadzone to avoid drift
+    if (fabs(steering_x) < 0.1) steering_x = 0.0;
+    if (fabs(steering_y) < 0.1) steering_y = 0.0;
+    
+    // Check if user is trying to move in normal driving mode
+    bool driving_mode_active = (fabs(steering_x) > 0.1 || fabs(steering_y) > 0.1);
+    
+    if (driving_mode_active && THROTTLE_TYPE == SERVO_PWM_THROTTLE) {
+        // Use normal driving mode
+        normal_driving_mode(steering_x, steering_y);
+        
+        // LED pattern - quick double blink for driving mode
+        heading_led_on(0); delay(20);
+        heading_led_off(); delay(80);
+        heading_led_on(0); delay(20);
+        heading_led_off(); delay(120);
+    } else {
+        // Original idle behavior
+        motors_off();               //assure motors are off
+        
+        //normal LED "fast flash" - indicates RC signal is good while sitting idle
+        heading_led_on(0); delay(30);
+        heading_led_off(); delay(120);
 
-    //if in config mode blip LED again to show "double-flash" 
-    if (get_config_mode() == true) {
-      heading_led_off(); delay(400);
-      heading_led_on(0); delay(30);
-      heading_led_off(); delay(140);
+        //if in config mode blip LED again to show "double-flash" 
+        if (get_config_mode() == true) {
+            heading_led_off(); delay(400);
+            heading_led_on(0); delay(30);
+            heading_led_off(); delay(140);
+        }
     }
 
     check_config_mode();          //check if user requests we enter / exit config mode

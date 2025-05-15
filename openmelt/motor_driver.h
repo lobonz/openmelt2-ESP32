@@ -23,6 +23,9 @@ void set_servo_pwm(int motor_pin, int pulse_width);
 void set_direct_esc_control(bool enable);
 void set_esc_throttle(float throttle_percent);
 
+// Normal driving mode when throttle is zero
+void normal_driving_mode(float steering_x, float steering_y);
+
 //turn motor_X_on (throttle_percent only used for dynamic PWM throttle mode)
 //is_translating flag indicates if this is part of a translational movement
 void motor_on(float throttle_percent, int motor_pin, bool is_translating = false);

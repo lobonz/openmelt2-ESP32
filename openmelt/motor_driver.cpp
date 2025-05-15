@@ -39,6 +39,41 @@ void set_direct_esc_control(bool enable) {
   }
 }
 
+// Function to handle normal driving mode when throttle is zero
+// steering_x and steering_y should be normalized from -1.0 to 1.0
+// where (0,1)=forward, (0,-1)=backward, (1,0)=right, (-1,0)=left
+void normal_driving_mode(float steering_x, float steering_y) {
+  if (THROTTLE_TYPE != SERVO_PWM_THROTTLE) return;
+  
+  // Calculate motor values based on steering inputs
+  // Left motor (motor1) and right motor (motor2)
+  float left_motor = steering_y + steering_x;   // Forward+Right -> Left motor increases
+  float right_motor = steering_y - steering_x;  // Forward+Left -> Right motor increases
+  
+  // Limit values to range -1.0 to 1.0
+  left_motor = constrain(left_motor, -1.0, 1.0);
+  right_motor = constrain(right_motor, -1.0, 1.0);
+  
+  // Map from -1.0,1.0 to pulse width (1000-2000μs)
+  // 1500μs is neutral, 2000μs is full forward, 1000μs is full reverse
+  int left_pulse = 1500 + (left_motor * 500);
+  int right_pulse = 1500 - (right_motor * 500);
+  
+  // Send values to motors
+  current_motor1_pulse_width = left_pulse;
+  current_motor2_pulse_width = right_pulse;
+  motor1_servo.writeMicroseconds(left_pulse);
+  motor2_servo.writeMicroseconds(right_pulse);
+  
+  // Debug output
+  static unsigned long last_debug = 0;
+  if (millis() - last_debug > 500) {
+    debug_printf("MOTOR", "Normal driving mode - Steering X: %.2f, Y: %.2f, Left PWM: %d, Right PWM: %d", 
+                steering_x, steering_y, left_pulse, right_pulse);
+    last_debug = millis();
+  }
+}
+
 // Function to directly set ESC throttle for testing
 // throttle_percent should be 0.0-1.0
 void set_esc_throttle(float throttle_percent) {
