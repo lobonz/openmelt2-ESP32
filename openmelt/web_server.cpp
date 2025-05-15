@@ -1303,7 +1303,7 @@ class TinyLinePlot {
 // Handle 404 - Just serve the main page instead
 void handleNotFound() {
   handleRoot();
-  debug_print("WEB", "Unknown URI requested - serving main page");
+  debug_print_safe("WEB", "Unknown URI requested - serving main page");
 }
 
 // Parse telemetry data string into JSON format
@@ -1464,9 +1464,16 @@ void update_web_data(const String& telemetry, const String& logs) {
 
 // Web server task function to run in separate thread
 void web_server_task(void *parameter) {
-  // Reduce WiFi power to minimum to avoid interference
-  WiFi.setTxPower(WIFI_POWER_MINUS_1dBm);
+#ifdef ENABLE_WIFI
+  // Use configured WiFi power level
+  WiFi.setTxPower(WIFI_POWER_LEVEL);
   
+#ifdef DISABLE_WIFI_POWER_SAVE
+  // Disable power saving mode
+  WiFi.setSleep(false);
+  debug_print_safe("WEB", "WiFi power saving mode disabled in web server task");
+#endif
+
   // Configure access point
   String wifiMsg = "Setting up WiFi access point: " + String(ssid);
   debug_print_safe("WEB", wifiMsg);
@@ -1504,26 +1511,29 @@ void web_server_task(void *parameter) {
     // Small delay to avoid hogging CPU
     delay(10);
   }
+#endif // ENABLE_WIFI
 }
 
 // Function to start the web server in a separate task
 void start_web_server() {
-  // Check if server is already running
-  if (server_running) {
-    debug_print("WEB", "Web server is already running");
-    return;
-  }
-  
-  // Create task with increased stack size
-  xTaskCreatePinnedToCore(
-    web_server_task,   // Task function
-    "WebServerTask",   // Task name
-    WEB_SERVER_TASK_STACK_SIZE,  // Stack size 
-    NULL,              // Parameters
-    1,                 // Priority
-    NULL,              // Task handle
-    1                  // Core (1 = second core)
-  );
+#ifdef ENABLE_WIFI
+#ifdef ENABLE_WEBSERVER
+    debug_print_safe("WEBSERVER", "Starting web server task");
+    
+    // Start the web server task on Core 0 (second core)
+    xTaskCreatePinnedToCore(
+        web_server_task,
+        "WebServerTask",
+        WEB_SERVER_TASK_STACK_SIZE,
+        NULL,
+        1,
+        NULL,
+        0  // Run on Core 0 (second core)
+    );
+#else
+    debug_print_safe("WEBSERVER", "Web server disabled by configuration");
+#endif // ENABLE_WEBSERVER
+#endif // ENABLE_WIFI
 }
 
 // Function to initialize the web server (API compatibility wrapper)

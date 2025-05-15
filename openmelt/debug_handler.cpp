@@ -337,4 +337,8 @@ void debug_print_safe(const String& module, const String& message) {
 
 void debug_print_safe(const String& module, const char* message) {
   debug_print(module.c_str(), message);
+}
+
+void debug_print_safe(const char* module, const char* message) {
+  debug_print(module, message);
 } 

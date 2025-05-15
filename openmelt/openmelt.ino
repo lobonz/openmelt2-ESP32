@@ -14,8 +14,7 @@
 #include <WebServer.h>
 #include <math.h>  // For fabs() function used in normal driving mode
 
-// Define to enable web server diagnostics (but still allow normal operation)
-#define ENABLE_WEBSERVER
+// Web server functionality is controlled by ENABLE_WIFI and ENABLE_WEBSERVER in melty_config.h
 
 #ifdef ENABLE_WATCHDOG
 #include <Adafruit_SleepyDog.h>
@@ -94,6 +93,7 @@ void setup() {
   service_watchdog(); // Reset watchdog
 #endif
 
+#ifdef ENABLE_WIFI
   // Setup WiFi - using longer delays to ensure stability
   debug_print("WIFI", "Setting up WiFi Access Point...");
   
@@ -115,10 +115,18 @@ void setup() {
   WiFi.mode(WIFI_AP);
   service_watchdog(); // Reset watchdog
   delay(500);
+
+#ifdef DISABLE_WIFI_POWER_SAVE
+  // Disable power saving mode to prevent random GPIO signals
+  WiFi.setSleep(false);
+  debug_print("WIFI", "WiFi power saving mode disabled");
+  service_watchdog(); // Reset watchdog
+  delay(100);
+#endif
   
-  // Create the access point with reduced power to minimize interference
+  // Create the access point with configured power level
   debug_printf("WIFI", "Creating access point with SSID: %s", ssid);
-  WiFi.setTxPower(WIFI_POWER_11dBm); // Reduce WiFi power
+  WiFi.setTxPower(WIFI_POWER_LEVEL); // Use configured power level
   bool apStarted = WiFi.softAP(ssid, password);
   service_watchdog(); // Reset watchdog
   delay(500); // More time for AP to stabilize
@@ -136,6 +144,9 @@ void setup() {
   debug_print("SYSTEM", "Starting web server task...");
   init_web_server();
   service_watchdog(); // Reset watchdog
+#else
+  debug_print("WIFI", "WiFi disabled by configuration");
+#endif // ENABLE_WIFI
   
   // Give system time to stabilize before continuing
   delay(500);

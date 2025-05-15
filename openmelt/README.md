@@ -92,5 +92,7 @@ The system implements smart mode switching with these configurable parameters:
 - `NORMAL_DRIVING_MODE_STEERING_DEADZONE`: Prevents drift from small steering inputs (default: 0.1)
 - `THROTTLE_DEADZONE_PERCENT`: Small throttle values that are treated as zero (default: 3%)
 - `MODE_SWITCH_TIMEOUT_MS`: Timeout before switching modes when inputs are inactive (default: 500ms)
+- `NORMAL_DRIVING_MOTOR_1_REVERSE`: Set to true to reverse motor 1 direction (default: false)
+- `NORMAL_DRIVING_MOTOR_2_REVERSE`: Set to true to reverse motor 2 direction (default: false)
 
 This feature makes the robot multi-purpose, allowing it to drive normally when not in melty brain mode and automatically switching back to melty brain behavior when throttle is applied.

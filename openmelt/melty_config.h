@@ -11,6 +11,14 @@
 //----------DIAGNOSTICS----------
 // #define JUST_DO_DIAGNOSTIC_LOOP                 //Disables the robot / just displays config / battery voltage / RC info via serial
 
+//----------WIFI CONFIGURATION----------
+// #define ENABLE_WIFI                                //Comment out to disable WiFi entirely (reduces potential interference)
+// #define ENABLE_WEBSERVER                           //Enable web server diagnostics (but still allow normal operation)
+#define WIFI_POWER_LEVEL WIFI_POWER_11dBm          //Power level for WiFi: WIFI_POWER_19_5dBm, WIFI_POWER_19dBm, WIFI_POWER_18_5dBm, 
+                                                   //WIFI_POWER_17dBm, WIFI_POWER_15dBm, WIFI_POWER_13dBm, WIFI_POWER_11dBm, WIFI_POWER_8_5dBm,
+                                                   //WIFI_POWER_7dBm, WIFI_POWER_5dBm, WIFI_POWER_2dBm, WIFI_POWER_MINUS_1dBm
+#define DISABLE_WIFI_POWER_SAVE                    //Disable WiFi power saving to prevent potential GPIO signal interference
+
 //----------EEPROM----------
 #define ENABLE_EEPROM_STORAGE                     //Comment out this to disable EEPROM (for ARM)
 #define EEPROM_WRITTEN_SENTINEL_VALUE 41          //Changing this value will cause existing EEPROM values to be invalidated (revert to defaults)
@@ -151,6 +159,8 @@ enum throttle_modes {
 #define NORMAL_DRIVING_MODE_STEERING_DEADZONE 0.1    // Deadzone for steering inputs in normal driving mode (0.0-1.0)
 #define THROTTLE_DEADZONE_PERCENT 3                 // Throttle values below this are considered zero (for hysteresis)
 #define MODE_SWITCH_TIMEOUT_MS 500                   // Time in ms that steering must be below deadzone before switching modes
+#define NORMAL_DRIVING_MOTOR_1_REVERSE false        // Set to true to reverse direction of motor 1 in normal driving mode
+#define NORMAL_DRIVING_MOTOR_2_REVERSE true        // Set to true to reverse direction of motor 2 in normal driving mode
 
 
 //----------SAFETY----------

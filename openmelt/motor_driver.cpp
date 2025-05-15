@@ -54,6 +54,10 @@ void normal_driving_mode(float steering_x, float steering_y) {
   float left_motor = steering_y + steering_x;   // Forward+Right -> Left motor increases
   float right_motor = steering_y - steering_x;  // Forward+Left -> Right motor increases
   
+  // Apply motor direction reversing if configured
+  if (NORMAL_DRIVING_MOTOR_1_REVERSE) left_motor = -left_motor;
+  if (NORMAL_DRIVING_MOTOR_2_REVERSE) right_motor = -right_motor;
+  
   // Limit values to range -1.0 to 1.0
   left_motor = constrain(left_motor, -1.0, 1.0);
   right_motor = constrain(right_motor, -1.0, 1.0);
