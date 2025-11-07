@@ -1,5 +1,5 @@
 
-#include "arduino.h"
+#include "Arduino.h"
 #include "melty_config.h"
 
 //returns battery voltage
@@ -19,4 +19,3 @@ int battery_voltage_low(){
   if (low_bat_count > LOW_BAT_REPEAT_READS_BEFORE_ALARM) return true;
   return false;
 }
-

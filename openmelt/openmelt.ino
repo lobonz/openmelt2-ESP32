@@ -39,28 +39,28 @@ void service_watchdog() {
 //loops until a good RC signal is detected and throttle is zero (assures safe start)
 static void wait_for_rc_good_and_zero_throttle() {
     while (rc_signal_is_healthy() == false || rc_get_throttle_percent() > 0) {
-      
+
       //"slow on/off" for LED while waiting for signal
       heading_led_on(0); delay(250);
       heading_led_off(); delay(250);
-      
+
       //services watchdog and echo diagnostics while we are waiting for RC signal
       service_watchdog();
       echo_diagnostics();
   }
 }
-  
+
 
 //Arduino initial setup function
 void setup() {
-  
+
   Serial.begin(115200);
   delay(1000);
   Serial.println("Starting OpenMelt...");
-  
+
   // Initialize debug handler first before any debug calls
   init_debug_handler();
-  
+
   debug_print("SYSTEM", "*** OpenMelt starting up... ***");
 
   //get motor drivers setup (and off!) first thing
@@ -77,18 +77,18 @@ void setup() {
 
   init_rc();
   service_watchdog(); // Reset watchdog
-  
+
   init_accel();   //accelerometer uses i2c - which can fail blocking (so only initializing it -after- the watchdog is running)
   service_watchdog(); // Reset watchdog
-  
+
 //load settings on boot
 #ifdef ENABLE_EEPROM_STORAGE
   debug_print("SYSTEM", "Initializing EEPROM for persistent storage");
   // Initialize EEPROM first before loading settings
   init_eeprom();
   service_watchdog(); // Reset watchdog
-  
-  debug_print("SYSTEM", "Loading stored configuration");  
+
+  debug_print("SYSTEM", "Loading stored configuration");
   load_melty_config_settings();
   service_watchdog(); // Reset watchdog
 #endif
@@ -96,20 +96,20 @@ void setup() {
 #ifdef ENABLE_WIFI
   // Setup WiFi - using longer delays to ensure stability
   debug_print("WIFI", "Setting up WiFi Access Point...");
-  
+
   // Complete WiFi reset
   WiFi.disconnect(true);
   service_watchdog(); // Reset watchdog
   delay(200);
-  
+
   WiFi.softAPdisconnect(true);
   service_watchdog(); // Reset watchdog
   delay(200);
-  
+
   WiFi.mode(WIFI_OFF);
   service_watchdog(); // Reset watchdog
   delay(500);
-  
+
   // Set WiFi mode explicitly
   debug_print("WIFI", "Setting WiFi mode to AP");
   WiFi.mode(WIFI_AP);
@@ -123,14 +123,14 @@ void setup() {
   service_watchdog(); // Reset watchdog
   delay(100);
 #endif
-  
+
   // Create the access point with configured power level
   debug_printf("WIFI", "Creating access point with SSID: %s", ssid);
   WiFi.setTxPower(WIFI_POWER_LEVEL); // Use configured power level
   bool apStarted = WiFi.softAP(ssid, password);
   service_watchdog(); // Reset watchdog
   delay(500); // More time for AP to stabilize
-  
+
   if (apStarted) {
     debug_print("WIFI", "Access point created successfully");
     IPAddress IP = WiFi.softAPIP();
@@ -139,7 +139,7 @@ void setup() {
     debug_print_level(DEBUG_ERROR, "WIFI", "Failed to create access point!");
   }
   service_watchdog(); // Reset watchdog
-  
+
   // Initialize web server
   debug_print("SYSTEM", "Starting web server task...");
   init_web_server();
@@ -147,10 +147,10 @@ void setup() {
 #else
   debug_print("WIFI", "WiFi disabled by configuration");
 #endif // ENABLE_WIFI
-  
+
   // Give system time to stabilize before continuing
   delay(500);
-  
+
   debug_print("SYSTEM", "Setup complete!");
 
 //if JUST_DO_DIAGNOSTIC_LOOP - then we just loop and display debug info via USB (good for testing)
@@ -178,7 +178,7 @@ static void echo_diagnostics() {
     return;
   }
   last_diagnostic_update = current_time;
-  
+
   // Use the new debug handler to update and get diagnostics
   update_standard_diagnostics();
 }
@@ -190,7 +190,7 @@ static void display_rpm_if_requested() {
     delay(750);
      //verify throttle at zero to prevent accidental entry into RPM flash
     if (rc_get_forback_enum() == RC_FORBACK_FORWARD && rc_get_throttle_percent() == 0) {
-       
+
       //throttle up cancels RPM count
       for (int x = 0; x < get_max_rpm() && rc_get_throttle_percent() == 0; x = x + 100) {
         service_watchdog();   //flashing out RPM can take a while - need to assure watchdog doesn't trigger
@@ -206,29 +206,29 @@ static void display_rpm_if_requested() {
 static void check_config_mode() {
   //if user pulls control stick back for 750ms - enters (or exits) interactive configuration mode
   if (rc_get_forback_enum() == RC_FORBACK_BACKWARD) {
-    delay(750);
+    delay(5000); // 5 second delay - config delay
     if (rc_get_forback_enum() == RC_FORBACK_BACKWARD) {
-      toggle_config_mode(); 
+      toggle_config_mode();
       if (get_config_mode() == false) save_melty_config_settings();    //save melty settings on config mode exit
-      
+
       //wait for user to release stick - so we don't re-toggle modes
       while (rc_get_forback_enum() == RC_FORBACK_BACKWARD) {
         service_watchdog();
       }
     }
-  }    
+  }
 }
 
 //handles the bot when not spinning (with RC good)
 static void handle_bot_idle() {
     // Original idle behavior
     motors_off();               //assure motors are off
-    
+
     //normal LED "fast flash" - indicates RC signal is good while sitting idle
     heading_led_on(0); delay(30);
     heading_led_off(); delay(120);
 
-    //if in config mode blip LED again to show "double-flash" 
+    //if in config mode blip LED again to show "double-flash"
     if (get_config_mode() == true) {
         heading_led_off(); delay(400);
         heading_led_on(0); delay(30);
@@ -256,11 +256,11 @@ void loop() {
     // If RC signal is not healthy, ensure motors are off
     motors_off();
     in_normal_driving_mode = false;
-    
+
     // Show slow flash for no signal
     heading_led_on(0); delay(30);
     heading_led_off(); delay(600);
-    
+
     //services watchdog and echo diagnostics while we are waiting for RC signal
     service_watchdog();
     echo_diagnostics();
@@ -271,7 +271,7 @@ void loop() {
   // Get throttle with deadzone
   int throttle_percent = rc_get_throttle_percent();
   bool throttle_is_zero = (throttle_percent <= THROTTLE_DEADZONE_PERCENT);
-  
+
   // If throttle has been activated, record the time
   if (!throttle_is_zero) {
     last_throttle_active_time = millis();
@@ -282,28 +282,28 @@ void loop() {
     // Switch to melty mode if throttle is active
     in_normal_driving_mode = false;
     //this is where all the motor control happens!  (see spin_control.cpp)
-    spin_one_rotation();  
+    spin_one_rotation();
   } else {
     // Throttle is zero, determine if we should be in normal driving mode or idle
-    
+
     // Get steering stick values
     float steering_x = rc_get_leftright() / 450.0;  // Normalize to -1.0 to 1.0 range
     float steering_y = rc_get_forback() / 450.0;    // Normalize to -1.0 to 1.0 range
-    
+
     // Apply deadzone
     bool steering_x_active = (fabs(steering_x) > NORMAL_DRIVING_MODE_STEERING_DEADZONE);
     bool steering_y_active = (fabs(steering_y) > NORMAL_DRIVING_MODE_STEERING_DEADZONE);
-    
+
     // If steering is active, record the time
     if (steering_x_active || steering_y_active) {
       last_steering_active_time = millis();
     }
-    
+
     // Check if we are in or should switch to normal driving mode
     unsigned long current_time = millis();
     unsigned long steering_inactive_time = current_time - last_steering_active_time;
     unsigned long throttle_inactive_time = current_time - last_throttle_active_time;
-    
+
     // If currently in driving mode, stay in it if steering is active
     if (in_normal_driving_mode) {
       if (steering_x_active || steering_y_active) {
@@ -312,9 +312,9 @@ void loop() {
           // Zero out steering values inside deadzone for smoother control
           if (fabs(steering_x) <= NORMAL_DRIVING_MODE_STEERING_DEADZONE) steering_x = 0.0;
           if (fabs(steering_y) <= NORMAL_DRIVING_MODE_STEERING_DEADZONE) steering_y = 0.0;
-          
+
           normal_driving_mode(steering_x, steering_y);
-          
+
           // LED pattern - quick double blink for driving mode
           heading_led_on(0); delay(20);
           heading_led_off(); delay(80);
@@ -325,8 +325,8 @@ void loop() {
           in_normal_driving_mode = false;
           handle_bot_idle();
         }
-      } 
-      else if (steering_inactive_time > MODE_SWITCH_TIMEOUT_MS && 
+      }
+      else if (steering_inactive_time > MODE_SWITCH_TIMEOUT_MS &&
                throttle_inactive_time > MODE_SWITCH_TIMEOUT_MS) {
         // If steering has been inactive for the timeout period, exit driving mode
         in_normal_driving_mode = false;
@@ -336,7 +336,7 @@ void loop() {
         // Steering is inactive but timeout hasn't elapsed, stay in driving mode
         if (THROTTLE_TYPE == SERVO_PWM_THROTTLE) {
           normal_driving_mode(0.0, 0.0);  // Zero inputs to stop movement
-          
+
           // LED pattern - quick double blink for driving mode
           heading_led_on(0); delay(20);
           heading_led_off(); delay(80);
@@ -348,20 +348,20 @@ void loop() {
           handle_bot_idle();
         }
       }
-    } 
+    }
     else {
       // Not in driving mode yet
       if (steering_x_active || steering_y_active) {
         // Steering is active, switch to driving mode
         in_normal_driving_mode = true;
-        
+
         if (THROTTLE_TYPE == SERVO_PWM_THROTTLE) {
           // Zero out steering values inside deadzone for smoother control
           if (fabs(steering_x) <= NORMAL_DRIVING_MODE_STEERING_DEADZONE) steering_x = 0.0;
           if (fabs(steering_y) <= NORMAL_DRIVING_MODE_STEERING_DEADZONE) steering_y = 0.0;
-          
+
           normal_driving_mode(steering_x, steering_y);
-          
+
           // LED pattern - quick double blink for driving mode
           heading_led_on(0); delay(20);
           heading_led_off(); delay(80);

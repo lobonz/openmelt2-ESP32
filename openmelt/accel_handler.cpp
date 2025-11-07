@@ -12,7 +12,7 @@
 
 //Sparkfun's LIS311 library is used (also works for Adafruit part)
 
-#include <arduino.h>
+#include <Arduino.h>
 #include "melty_config.h"
 #include "accel_handler.h"
 #include "debug_handler.h"
@@ -24,18 +24,18 @@ LIS331 xl;
 void init_accel() {
 
   Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);  // Initialize I2C with the pins defined in melty_config.h
-  
+
   Wire.setClock(400000);  //increase I2C speed to reduce read times a bit
                           //value of 400000 allows accel read in ~1ms and
                           //is verfied to work with Sparkfun level converter
                           //(some level converters have issues at higher speeds)
-  
+
   xl.setI2CAddr(ACCEL_I2C_ADDRESS);
   xl.begin(LIS331::USE_I2C);
 
   //sets accelerometer to specified scale (100, 200, 400g)
   xl.setFullScale(ACCEL_RANGE);
-  
+
   debug_printf("ACCEL", "Accelerometer initialized with range: %d g", ACCEL_MAX_SCALE);
 }
 
@@ -44,19 +44,19 @@ void init_accel() {
 float get_accel_force_g() {
   int16_t x, y, z;
   xl.readAxes(x, y, z);
-  
+
   // Debug output for raw accelerometer readings
   static unsigned long last_accel_debug = 0;
   if (millis() - last_accel_debug > 2000) {  // Every 2 seconds to reduce spam
     float x_g = xl.convertToG(ACCEL_MAX_SCALE, x);
     float y_g = xl.convertToG(ACCEL_MAX_SCALE, y);
     float z_g = xl.convertToG(ACCEL_MAX_SCALE, z);
-    
-    debug_printf("ACCEL", "Raw Accel - X: %.2fg, Y: %.2fg, Z: %.2fg, Used value: %.2fg", 
+
+    debug_printf("ACCEL", "Raw Accel - X: %.2fg, Y: %.2fg, Z: %.2fg, Used value: %.2fg",
                 x_g, y_g, z_g, xl.convertToG(ACCEL_MAX_SCALE, x));
-    
+
     last_accel_debug = millis();
   }
-  
+
   return xl.convertToG(ACCEL_MAX_SCALE,x);
 }

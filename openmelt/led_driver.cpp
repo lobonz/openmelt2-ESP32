@@ -1,4 +1,4 @@
-#include "arduino.h"
+#include "Arduino.h"
 #include "melty_config.h"
 #include "spin_control.h"  // Add this to access get_config_mode()
 
@@ -77,7 +77,7 @@ void heading_led_on(int shimmer) {
         leds[i] = CRGB::Black;
       }
       FastLED.show();
-    }  
+    }
   } else {
     //just turn LED on with the configured color
     for (int i = 0; i < NUM_RGB_LEDS; i++) {
@@ -92,7 +92,7 @@ void heading_led_on(int shimmer) {
       digitalWrite(HEADING_LED_PIN, HIGH);
     } else {
       digitalWrite(HEADING_LED_PIN, LOW);
-    }  
+    }
   } else {
     //just turn LED on
      digitalWrite(HEADING_LED_PIN, HIGH);

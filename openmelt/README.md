@@ -18,7 +18,7 @@ The system includes a central debug handler that:
 
 1. Collects debug messages from all modules
 2. Formats and displays messages both via Serial and on the web interface
-3. Includes telemetry data from system components 
+3. Includes telemetry data from system components
 4. Supports different message priority levels (info, warning, error)
 
 ### Debug API
@@ -64,7 +64,7 @@ Tested with:
 - ESP32 (M5Stack Stamp S3)
 - H3LIS331DL accelerometer (±100g/±200g/±400g range options)
 - Standard RC receivers
-- Standard RC ESCs using PWM signaling 
+- Standard RC ESCs using PWM signaling
 
 
 OpenMelt Config Process

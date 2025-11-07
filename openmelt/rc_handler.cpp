@@ -1,13 +1,13 @@
 //This module handles the RC interface (interrupt driven)
 
 #include "rc_handler.h"
-#include "arduino.h"
+#include "Arduino.h"
 #include "melty_config.h"
 #include "debug_handler.h"
 #include <math.h>  // For sqrt function
 
 #define RC_DATA_UNLOCKED 0
-#define RC_DATA_LOCKED 1 
+#define RC_DATA_LOCKED 1
 
 static int rc_data_lock_state = RC_DATA_UNLOCKED;
 
@@ -80,11 +80,11 @@ static void update_rc_channel(struct rc_channel_t *rc_channel) {
 //verifies RC channels have returned values more
 //recent that MAX_MS_BETWEEN_RC_UPDATES
 bool rc_signal_is_healthy() {
-  
+
   lock_rc_data();
   unsigned long last_good_signal = throttle_rc_channel.last_good_signal;
   unlock_rc_data();
-  
+
   //initial signal not received
   if (last_good_signal == 0) {
     // Debug output every 1000ms to show we're waiting for initial signal
@@ -100,13 +100,13 @@ bool rc_signal_is_healthy() {
     // Debug output when signal is lost after previously being good
     static unsigned long last_debug = 0;
     if (millis() - last_debug > 1000) {
-      debug_printf("RC", "RC signal lost - Last good signal: %lums ago", 
+      debug_printf("RC", "RC signal lost - Last good signal: %lums ago",
                  millis() - last_good_signal);
       last_debug = millis();
     }
     return false;
   }
-  
+
   return true;
 }
 
@@ -128,11 +128,11 @@ int rc_get_throttle_percent() {
   }
 
   if (pulse_length >= FULL_THROTTLE_PULSE_LENGTH) return 100;
-  
+
   // For bidirectional transmitters sending ~1500μs at minimum stick position
   // Check if we're in the neutral/minimum range (1450-1550μs)
   if (pulse_length >= 1450 && pulse_length <= 1550) return 0;
-  
+
   // For standard transmitters with true minimum (below IDLE_THROTTLE_PULSE_LENGTH)
   if (pulse_length <= IDLE_THROTTLE_PULSE_LENGTH) return 0;
 
@@ -141,21 +141,21 @@ int rc_get_throttle_percent() {
   if (pulse_length > 1550) {
     long throttle_percent = (pulse_length - 1550) * 100;
     throttle_percent = throttle_percent / (FULL_THROTTLE_PULSE_LENGTH - 1550);
-    
+
     // Make sure we cap at 100% (in case calculation exceeds 100%)
     if (throttle_percent > 100) throttle_percent = 100;
-    
+
     // Debug the throttle calculation for values above 1550μs
     static unsigned long last_calc_debug = 0;
     if (millis() - last_calc_debug > 2000) {
-      debug_printf("RC", "Throttle calculation: (%d - 1550) * 100 / (%d - 1550) = %d%%", 
+      debug_printf("RC", "Throttle calculation: (%d - 1550) * 100 / (%d - 1550) = %d%%",
                  pulse_length, FULL_THROTTLE_PULSE_LENGTH, (int)throttle_percent);
       last_calc_debug = millis();
     }
-    
+
     return (int)throttle_percent;
   }
-  
+
   // For traditional RC transmitters with signals between idle and full
   // This branch should rarely be hit with bidirectional controllers
   long throttle_percent = (pulse_length - IDLE_THROTTLE_PULSE_LENGTH) * 100;
@@ -177,7 +177,7 @@ bool rc_get_is_lr_in_normal_deadzone() {
 
 //returns RC_FORBACK_FORWARD, RC_FORBACK_BACKWARD or RC_FORBACK_NEUTRAL based on stick position
 rc_forback_enum rc_get_forback_enum() {
-  
+
   lock_rc_data();
   unsigned long pulse_length = forback_rc_channel.pulse_length;
   unlock_rc_data();
@@ -192,7 +192,7 @@ rc_forback_enum rc_get_forback_enum() {
 //0 for hypothetical perfect center (reality is probably +/-50)
 //returns negative value for left / positive value for right
 int rc_get_leftright() {
-  
+
   lock_rc_data();
   unsigned long pulse_length = leftright_rc_channel.pulse_length;
   unlock_rc_data();
@@ -206,7 +206,7 @@ int rc_get_forback() {
   lock_rc_data();
   unsigned long pulse_length = forback_rc_channel.pulse_length;
   unlock_rc_data();
-  
+
   return pulse_length - CENTER_FORBACK_PULSE_LENGTH;
 }
 
@@ -216,31 +216,31 @@ float rc_get_translation_percent() {
   // Get the offsets for both axes
   int lr_offset = rc_get_leftright();
   int fb_offset = rc_get_forback();
-  
+
   // Calculate the distance from center using Pythagorean theorem
   float distance = sqrt(lr_offset * lr_offset + fb_offset * fb_offset);
-  
+
   // Define deadzone and max values
   const float MIN_TRANSLATION_DISTANCE = 50.0;  // Deadzone for center stick position
   const float MAX_TRANSLATION_DISTANCE = 450.0; // Distance at which we want 100% translation
-  
+
   // Debug output every 1000ms
   static unsigned long last_debug = 0;
   if (millis() - last_debug > 1000) {
-    debug_printf("RC", "Translation calculation: Distance=%0.1f, Min=%0.1f, Max=%0.1f", 
+    debug_printf("RC", "Translation calculation: Distance=%0.1f, Min=%0.1f, Max=%0.1f",
                 distance, MIN_TRANSLATION_DISTANCE, MAX_TRANSLATION_DISTANCE);
     last_debug = millis();
   }
-  
+
   // Check if we're in the center deadzone
   if (distance <= MIN_TRANSLATION_DISTANCE) return 0.0;
-  
+
   // Check if we're at or beyond max (100%)
   if (distance >= MAX_TRANSLATION_DISTANCE) return 1.0;
-  
+
   // Scale linearly between deadzone and max
   float percent = (distance - MIN_TRANSLATION_DISTANCE) / (MAX_TRANSLATION_DISTANCE - MIN_TRANSLATION_DISTANCE);
-  
+
   return percent;
 }
 
@@ -261,17 +261,16 @@ void init_rc(void) {
   forback_rc_channel.pulse_length = CENTER_FORBACK_PULSE_LENGTH;
   leftright_rc_channel.pulse_length = CENTER_LEFTRIGHT_PULSE_LENGTH;
   throttle_rc_channel.pulse_length = CENTER_LEFTRIGHT_PULSE_LENGTH;
-  
+
   // Set pins as inputs
   pinMode(forback_rc_channel.pin, INPUT);
   pinMode(leftright_rc_channel.pin, INPUT);
   pinMode(throttle_rc_channel.pin, INPUT);
-  
+
   // Attach interrupts
   attachInterrupt(digitalPinToInterrupt(forback_rc_channel.pin), forback_rc_change, CHANGE);
   attachInterrupt(digitalPinToInterrupt(leftright_rc_channel.pin), leftright_rc_change, CHANGE);
   attachInterrupt(digitalPinToInterrupt(throttle_rc_channel.pin), throttle_rc_change, CHANGE);
-  
+
   debug_print("RC", "RC interrupt handlers initialized");
 }
-

@@ -12,9 +12,9 @@
 // #define JUST_DO_DIAGNOSTIC_LOOP                 //Disables the robot / just displays config / battery voltage / RC info via serial
 
 //----------WIFI CONFIGURATION----------
-// #define ENABLE_WIFI                                //Comment out to disable WiFi entirely (reduces potential interference)
-// #define ENABLE_WEBSERVER                           //Enable web server diagnostics (but still allow normal operation)
-#define WIFI_POWER_LEVEL WIFI_POWER_11dBm          //Power level for WiFi: WIFI_POWER_19_5dBm, WIFI_POWER_19dBm, WIFI_POWER_18_5dBm, 
+#define ENABLE_WIFI                                //Comment out to disable WiFi entirely (reduces potential interference)
+#define ENABLE_WEBSERVER                           //Enable web server diagnostics (but still allow normal operation)
+#define WIFI_POWER_LEVEL WIFI_POWER_11dBm          //Power level for WiFi: WIFI_POWER_19_5dBm, WIFI_POWER_19dBm, WIFI_POWER_18_5dBm,
                                                    //WIFI_POWER_17dBm, WIFI_POWER_15dBm, WIFI_POWER_13dBm, WIFI_POWER_11dBm, WIFI_POWER_8_5dBm,
                                                    //WIFI_POWER_7dBm, WIFI_POWER_5dBm, WIFI_POWER_2dBm, WIFI_POWER_MINUS_1dBm
 #define DISABLE_WIFI_POWER_SAVE                    //Disable WiFi power saving to prevent potential GPIO signal interference
@@ -28,7 +28,7 @@
 //To force these values to take effect after interactive config - increment EEPROM_WRITTEN_SENTINEL_VALUE
 #define DEFAULT_ACCEL_MOUNT_RADIUS_CM 10.0         //Radius of accelerometer from center of robot
 #define DEFAULT_LED_OFFSET_PERCENT 0              //Adjust to make heading LED line up with direction robot travels 0-99 (increasing moves beacon clockwise)
-                                                   
+
 #define DEFAULT_ACCEL_ZERO_G_OFFSET 1.5f          //Value accelerometer returns with robot at rest (in G) - adjusts for any offset
                                                   //H3LIS331 claims +/-1g DC offset - typical - but +/-2.5 has been observed at +/-400g setting (enough to cause tracking error)
                                                   //Just enterring and exiting config mode will automatically set this value / save to EEPROM (based on current accel reading reflecting 0g)
@@ -103,11 +103,11 @@ enum throttle_modes {
                         //Robot speed is additionally controlled by portion of each rotation motor is on (unless DYNAMIC_PWM_MOTOR_ON_PORTION is defined)
                         //This mode reduces current levels during spin up at part throttle
 
-  SERVO_PWM_THROTTLE    //Standard RC Servo PWM signal (50Hz, 1000-2000μs pulse width)
+  SERVO_PWM_THROTTLE    //S1 sectandard RC Servo PWM signal (50Hz, 1000-2000μs pulse width)
                         //Compatible with standard RC ESCs like BLHeli
 };
 
-#define DYNAMIC_PWM_THROTTLE_PERCENT_MAX 1.0f   //Range of RC throttle DYNAMIC_PWM_THROTTLE is applied to 
+#define DYNAMIC_PWM_THROTTLE_PERCENT_MAX 1.0f   //Range of RC throttle DYNAMIC_PWM_THROTTLE is applied to
                                                 //0.5f for 0-50% throttle (full PWM_MOTOR_ON used for >50% throttle)
                                                 //1.0f for 0-100% throttle
 
@@ -123,7 +123,7 @@ enum throttle_modes {
 // - For this application we only use 1500-2000μs range (neutral to forward)
 // - 3.3V logic level from M5 Stamp S3 should be sufficient for most modern ESCs
 // - If ESC doesn't respond to 3.3V signal, a level shifter to 5V may be needed
-// 
+//
 // Normal ESC initialization sequence:
 // 1. Power up the ESC with the controller sending a neutral signal (1500μs)
 // 2. ESC should emit initialization tones (usually 1-3 tones)
@@ -139,7 +139,7 @@ enum throttle_modes {
 
 #define DYNAMIC_PWM_MOTOR_ON_PORTION 0.5f       //if defined (and DYNAMIC_PWM_THROTTLE is set) portion of each rotation motor is on is fixed at this value
 
-//----------PWM MOTOR SETTINGS---------- 
+//----------PWM MOTOR SETTINGS----------
 //(only used if a PWM throttle mode is chosen)
 //PWM values are 0-255 duty cycle
 #define PWM_MOTOR_ON 230                          //Motor PWM ON duty cycle (Simonk: 140 seems barely on / 230 seems a good near-full-throttle value)
@@ -168,6 +168,6 @@ enum throttle_modes {
 #define WATCH_DOG_TIMEOUT_MS 5000                 //Timeout value for watchdog (increased from 2000ms for WiFi operations)
 #define VERIFY_RC_THROTTLE_ZERO_AT_BOOT           //Requires RC throttle be 0% at boot to allow spin-up for duration of MAX_MS_BETWEEN_RC_UPDATES (about 1 second)
                                                   //Intended as safety feature to prevent bot from spinning up at power-on if RC was inadvertently left on.
-                                                  //Downside is if unexpected reboot occurs during a fight - driver will need to set throttle to zero before power 
+                                                  //Downside is if unexpected reboot occurs during a fight - driver will need to set throttle to zero before power
 
 #endif

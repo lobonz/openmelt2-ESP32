@@ -11,7 +11,7 @@
 #ifdef ENABLE_EEPROM_STORAGE
 
 #include <EEPROM.h>
-#include <arduino.h>
+#include <Arduino.h>
 #include "config_storage.h"
 #include "debug_handler.h"
 
@@ -59,7 +59,7 @@ static void write_sentinel() {
 }
 
 //make sure we actually wrote values before trying to read... (doing 2x)
-//if EEPROM_WRITTEN_SENTINEL_VALUE is changed - will cause EEPROM values to invalidate / use default values 
+//if EEPROM_WRITTEN_SENTINEL_VALUE is changed - will cause EEPROM values to invalidate / use default values
 static int check_sentinel() {
   if (EEPROM.read(EEPROM_WRITTEN_SENTINEL_BYTE1_LOC) != EEPROM_WRITTEN_SENTINEL1_VALUE) return 0;
   if (EEPROM.read(EEPROM_WRITTEN_SENTINEL_BYTE2_LOC) != EEPROM_WRITTEN_SENTINEL2_VALUE) return 0;
@@ -72,10 +72,10 @@ void save_settings_to_eeprom(int led_offset, float accel_radius, float accel_zer
   EEPROM.put(EEPROM_ACCEL_RADIUS_BYTE1_LOC, accel_radius);
   EEPROM.put(EEPROM_ACCEL_OFFSET_BYTE1_LOC, accel_zero_g_offset);
   write_sentinel();
-  
+
   // ESP32 requires explicit commit to save EEPROM data to flash
   if (EEPROM.commit()) {
-    debug_printf("EEPROM", "Settings saved: LED offset=%d, accel_radius=%.2f, zero_g=%.2f", 
+    debug_printf("EEPROM", "Settings saved: LED offset=%d, accel_radius=%.2f, zero_g=%.2f",
                 led_offset, accel_radius, accel_zero_g_offset);
   } else {
     debug_print_level(DEBUG_ERROR, "EEPROM", "Failed to commit EEPROM data");
