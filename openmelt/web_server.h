@@ -9,5 +9,6 @@ void web_server_task(void *pvParameters);
 String parseTelemetryToJSON(const String &telemetryData);
 void handleEEPROM();
 void handleNotFound();
+void handleToggleConfigMode();
 
-#endif 
+#endif

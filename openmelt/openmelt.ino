@@ -203,8 +203,12 @@ static void display_rpm_if_requested() {
 }
 
 //checks if user has requested to enter / exit config mode
+// DISABLED: Config mode is now only accessible via the web UI
 static void check_config_mode() {
-  //if user pulls control stick back for 750ms - enters (or exits) interactive configuration mode
+  // Config mode toggle is now handled via web UI button only
+  // This prevents accidental config mode entry during normal/melty driving
+
+  /* Original RC controller config mode check - DISABLED
   if (rc_get_forback_enum() == RC_FORBACK_BACKWARD) {
     delay(5000); // 5 second delay - config delay
     if (rc_get_forback_enum() == RC_FORBACK_BACKWARD) {
@@ -217,6 +221,7 @@ static void check_config_mode() {
       }
     }
   }
+  */
 }
 
 //handles the bot when not spinning (with RC good)

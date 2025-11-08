@@ -2,6 +2,7 @@
 #include "debug_handler.h"
 #include "config_storage.h"
 #include "melty_config.h"
+#include "spin_control.h"
 #include <WiFi.h>
 #include <WebServer.h>
 #include <Arduino.h>
@@ -251,21 +252,23 @@ const char* htmlTemplate = R"(
       <button class="button" id="clearLogs">Clear Logs</button>
       <button class="button reset-button" id="resetMax">Reset Max Values</button>
       <button class="button" id="resetGraphs">Reset Graphs</button>
+      <button class="button" id="toggleConfigMode" style="background-color: #9b59b6;">Toggle Config Mode</button>
+      <span id="configModeStatus" style="margin-left: 10px; font-weight: bold;"></span>
     </div>
   </header>
-  
+
   <div class="tabs">
     <div class="tab active" data-tab="telemetry">Telemetry</div>
     <div class="tab" data-tab="graphs">Graphs</div>
     <div class="tab" data-tab="eeprom">EEPROM Settings</div>
   </div>
-  
+
   <div id="telemetry-tab" class="tab-content active">
     <div id="hud"></div>
     <h2>System Logs</h2>
     <div id="logs"></div>
   </div>
-  
+
   <div id="graphs-tab" class="tab-content">
     <h2>Real-time Telemetry Graphs</h2>
     <div class="graphs-container">
@@ -331,7 +334,7 @@ const char* htmlTemplate = R"(
       </div>
     </div>
   </div>
-  
+
   <div id="eeprom-tab" class="tab-content">
     <h2>EEPROM Settings</h2>
     <table class="eeprom-table">
@@ -351,7 +354,7 @@ const char* htmlTemplate = R"(
     </table>
     <button class="button" id="refreshEEPROM">Refresh EEPROM</button>
   </div>
-  
+
   <script src="/TinyLinePlot.js"></script>
   <script>
     // Create HUD elements for the key metrics
@@ -370,28 +373,28 @@ const char* htmlTemplate = R"(
         { id: 'motor2Throttle', title: 'Motor 2', unit: '%', hasMax: true, maxId: 'maxMotor2Throttle' }
       ]}
     ];
-    
+
     const hudElement = document.getElementById('hud');
-    
+
     // Create metric elements
     hudMetrics.forEach(metric => {
       const metricElement = document.createElement('div');
       metricElement.className = 'metric';
-      
+
       if (metric.isContainer) {
         // Create container with title
         metricElement.innerHTML = `<div class="metric-title">${metric.title}</div>`;
-        
+
         // Create container for child metrics
         const childContainer = document.createElement('div');
         childContainer.className = 'metric-container';
-        
+
         // Add child metrics
         metric.children.forEach(child => {
           const childElement = document.createElement('div');
           childElement.className = 'metric-child';
           childElement.id = `child-${child.id}`;
-          
+
           if (child.hasMax) {
             childElement.innerHTML = `
               <div class="metric-subtitle">${child.title}</div>
@@ -409,10 +412,10 @@ const char* htmlTemplate = R"(
               <div class="metric-unit">${child.unit}</div>
             `;
           }
-          
+
           childContainer.appendChild(childElement);
         });
-        
+
         metricElement.appendChild(childContainer);
       } else {
         // Standard metric
@@ -422,23 +425,23 @@ const char* htmlTemplate = R"(
           <div class="metric-unit">${metric.unit}</div>
         `;
       }
-      
+
       hudElement.appendChild(metricElement);
     });
-    
+
     // Track max values
     let maxGForce = 0;
     let maxRpm = 0;
     let maxMotor1Throttle = 0;
     let maxMotor2Throttle = 0;
-    
+
     // Logs container
     const logsElement = document.getElementById('logs');
-    
+
     // Initialize graph plots
     let rpmPlot, gForcePlot, throttlePlot, accelPlot, rcSignalPlot, batteryPlot;
     let timeCounter = 0;
-    
+
     function initGraphs() {
       // Common graph options
       const graphOptions = {
@@ -452,7 +455,7 @@ const char* htmlTemplate = R"(
         viewWindowSize: 60,
         autoScrollWithNewData: true
       };
-      
+
       // RPM Plot
       rpmPlot = new TinyLinePlot('rpmPlot', {
         ...graphOptions,
@@ -461,7 +464,7 @@ const char* htmlTemplate = R"(
         title: 'Rotation Speed'
       });
       rpmPlot.addDataset([], 'RPM').draw();
-      
+
       // G-Force Plot
       gForcePlot = new TinyLinePlot('gForcePlot', {
         ...graphOptions,
@@ -470,7 +473,7 @@ const char* htmlTemplate = R"(
         title: 'G-Force'
       });
       gForcePlot.addDataset([], 'Raw G').addDataset([], 'Used G').draw();
-      
+
       // Motor Throttle Plot
       throttlePlot = new TinyLinePlot('throttlePlot', {
         ...graphOptions,
@@ -479,7 +482,7 @@ const char* htmlTemplate = R"(
         title: 'Motor Throttle (Motor 1 & 2)'
       });
       throttlePlot.addDataset([], 'Motor 1').addDataset([], 'Motor 2').draw();
-      
+
       // Raw Acceleration Plot
       accelPlot = new TinyLinePlot('accelPlot', {
         ...graphOptions,
@@ -488,7 +491,7 @@ const char* htmlTemplate = R"(
         title: 'Acceleration XYZ'
       });
       accelPlot.addDataset([], 'X').addDataset([], 'Y').addDataset([], 'Z').draw();
-      
+
       // RC Signal Plot
       rcSignalPlot = new TinyLinePlot('rcSignalPlot', {
         ...graphOptions,
@@ -497,7 +500,7 @@ const char* htmlTemplate = R"(
         title: 'RC Signal (Throttle & Steering)'
       });
       rcSignalPlot.addDataset([], 'Throttle').addDataset([], 'Steering').draw();
-      
+
       // Battery Voltage Plot
       batteryPlot = new TinyLinePlot('batteryPlot', {
         ...graphOptions,
@@ -506,7 +509,7 @@ const char* htmlTemplate = R"(
         title: 'Battery Voltage'
       });
       batteryPlot.addDataset([], 'Voltage').draw();
-      
+
       // Setup graph control buttons
       setupGraphControls('rpmPlot', rpmPlot);
       setupGraphControls('gForcePlot', gForcePlot);
@@ -515,17 +518,17 @@ const char* htmlTemplate = R"(
       setupGraphControls('rcSignalPlot', rcSignalPlot);
       setupGraphControls('batteryPlot', batteryPlot);
     }
-    
+
     function setupGraphControls(plotId, plot) {
       document.getElementById(`${plotId}-autoScroll`).addEventListener('click', function() {
         plot.toggleAutoScroll();
         this.classList.toggle('active');
         plot.draw();
       });
-      
+
       document.getElementById(`${plotId}-clear`).addEventListener('click', function() {
         plot.clear();
-        
+
         // Re-add empty datasets based on the plot type
         if (plotId === 'rpmPlot') {
           plot.addDataset([], 'RPM');
@@ -540,35 +543,40 @@ const char* htmlTemplate = R"(
         } else if (plotId === 'batteryPlot') {
           plot.addDataset([], 'Voltage');
         }
-        
+
         plot.draw();
       });
     }
-    
+
     // Function to update the HUD with telemetry data
     function updateHUD(data) {
+      // Update config mode status if present
+      if (data.configMode !== undefined) {
+        updateConfigModeStatus(data.configMode);
+      }
+
       // Update regular metrics
       Object.keys(data).forEach(key => {
         const element = document.getElementById(key);
         if (element && data[key] !== undefined) {
           element.textContent = data[key];
-          
+
           // Track max values
           if (key === 'gForce' && parseFloat(data[key]) > maxGForce) {
             maxGForce = parseFloat(data[key]);
             document.getElementById('maxGForce').textContent = maxGForce.toFixed(2);
           }
-          
+
           if (key === 'rpm' && parseInt(data[key]) > maxRpm) {
             maxRpm = parseInt(data[key]);
             document.getElementById('maxRpm').textContent = maxRpm;
           }
-          
+
           if (key === 'motor1Throttle' && parseInt(data[key]) > maxMotor1Throttle) {
             maxMotor1Throttle = parseInt(data[key]);
             document.getElementById('maxMotor1Throttle').textContent = maxMotor1Throttle;
           }
-          
+
           if (key === 'motor2Throttle' && parseInt(data[key]) > maxMotor2Throttle) {
             maxMotor2Throttle = parseInt(data[key]);
             document.getElementById('maxMotor2Throttle').textContent = maxMotor2Throttle;
@@ -576,16 +584,16 @@ const char* htmlTemplate = R"(
         }
       });
     }
-    
+
     // Function to update the graphs with new telemetry data
     function updateGraphs(data) {
       timeCounter += 0.5;
-      
+
       // Update RPM Plot
       if (rpmPlot && data.rpm !== undefined) {
         rpmPlot.addPoint(0, { x: timeCounter, y: parseInt(data.rpm) }).draw();
       }
-      
+
       // Update G-Force Plot
       if (gForcePlot) {
         if (data.gForce !== undefined) {
@@ -596,7 +604,7 @@ const char* htmlTemplate = R"(
         }
         gForcePlot.draw();
       }
-      
+
       // Update Motor Throttle Plot
       if (throttlePlot) {
         if (data.motor1Throttle !== undefined) {
@@ -607,7 +615,7 @@ const char* htmlTemplate = R"(
         }
         throttlePlot.draw();
       }
-      
+
       // Update Raw Acceleration Plot (use JSON data)
       if (accelPlot) {
         if (data.accelX !== undefined) {
@@ -621,58 +629,58 @@ const char* htmlTemplate = R"(
         }
         accelPlot.draw();
       }
-      
+
       // Update RC Signal Plot
       if (rcSignalPlot) {
         // Use data from JSON instead of parsing raw logs
         if (data.rcThrottle !== undefined) {
           rcSignalPlot.addPoint(0, { x: timeCounter, y: parseInt(data.rcThrottle) });
         }
-        
+
         if (data.rcSteering !== undefined) {
           rcSignalPlot.addPoint(1, { x: timeCounter, y: parseInt(data.rcSteering) });
         }
-        
+
         rcSignalPlot.draw();
       }
-      
+
       // Update Battery Voltage Plot
       if (batteryPlot && data.battery !== undefined) {
         batteryPlot.addPoint(0, { x: timeCounter, y: parseFloat(data.battery) }).draw();
       }
     }
-    
+
     // Function to update the logs
     function updateLogs(logs) {
       logsElement.innerHTML = logs
         .replace(/⚠️/g, '<span class="warning">⚠️</span>')
         .replace(/🛑/g, '<span class="error">🛑</span>');
-      
+
       // Auto-scroll to bottom
       logsElement.scrollTop = logsElement.scrollHeight;
     }
-    
+
     // Function to update EEPROM settings table
     function updateEEPROMSettings(data) {
       const tableBody = document.getElementById('eeprom-settings');
       tableBody.innerHTML = '';
-      
+
       // Add each setting to the table
       Object.keys(data).forEach(key => {
         const row = document.createElement('tr');
         const setting = data[key];
-        
+
         row.innerHTML = `
           <td>${setting.name}</td>
           <td>${setting.value}${setting.unit || ''}</td>
           <td>${setting.default}${setting.unit || ''}</td>
           <td>${setting.description}</td>
         `;
-        
+
         tableBody.appendChild(row);
       });
     }
-    
+
     // Function to fetch data from the server
     function fetchData() {
       // Fetch telemetry data
@@ -685,7 +693,7 @@ const char* htmlTemplate = R"(
         .catch(error => {
           console.error('Error fetching telemetry:', error);
         });
-      
+
       // Fetch logs separately just for display
       fetch('/logs')
         .then(response => response.text())
@@ -696,7 +704,7 @@ const char* htmlTemplate = R"(
           console.error('Error fetching logs:', error);
         });
     }
-    
+
     // Function to fetch EEPROM settings
     function fetchEEPROMSettings() {
       fetch('/eeprom')
@@ -708,7 +716,7 @@ const char* htmlTemplate = R"(
           console.error('Error fetching EEPROM settings:', error);
         });
     }
-    
+
     // Tab functionality
     const tabs = document.querySelectorAll('.tab');
     tabs.forEach(tab => {
@@ -716,21 +724,21 @@ const char* htmlTemplate = R"(
         // Remove active class from all tabs and content
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-        
+
         // Add active class to clicked tab
         tab.classList.add('active');
-        
+
         // Show corresponding content
         const tabName = tab.getAttribute('data-tab');
         document.getElementById(`${tabName}-tab`).classList.add('active');
-        
+
         // Load EEPROM data when switching to EEPROM tab
         if (tabName === 'eeprom') {
           fetchEEPROMSettings();
         }
       });
     });
-    
+
     // Clear logs button
     document.getElementById('clearLogs').addEventListener('click', () => {
       fetch('/clear', { method: 'POST' })
@@ -741,7 +749,7 @@ const char* htmlTemplate = R"(
           console.error('Error clearing logs:', error);
         });
     });
-    
+
     // Reset max values button
     document.getElementById('resetMax').addEventListener('click', () => {
       maxGForce = 0;
@@ -753,7 +761,7 @@ const char* htmlTemplate = R"(
       document.getElementById('maxMotor1Throttle').textContent = '0';
       document.getElementById('maxMotor2Throttle').textContent = '0';
     });
-    
+
     // Reset graphs button
     document.getElementById('resetGraphs').addEventListener('click', () => {
       timeCounter = 0;
@@ -764,16 +772,40 @@ const char* htmlTemplate = R"(
       if (rcSignalPlot) rcSignalPlot.clear().addDataset([], 'Throttle').addDataset([], 'Steering').draw();
       if (batteryPlot) batteryPlot.clear().addDataset([], 'Voltage').draw();
     });
-    
+
     // Refresh EEPROM button
     document.getElementById('refreshEEPROM').addEventListener('click', fetchEEPROMSettings);
-    
+
+    // Toggle Config Mode button
+    document.getElementById('toggleConfigMode').addEventListener('click', () => {
+      fetch('/toggle-config', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+          updateConfigModeStatus(data.configMode);
+        })
+        .catch(error => {
+          console.error('Error toggling config mode:', error);
+        });
+    });
+
+    // Function to update config mode status display
+    function updateConfigModeStatus(isConfigMode) {
+      const statusElement = document.getElementById('configModeStatus');
+      if (isConfigMode) {
+        statusElement.textContent = '⚙️ CONFIG MODE ACTIVE';
+        statusElement.style.color = '#9b59b6';
+      } else {
+        statusElement.textContent = '▶️ Normal Mode';
+        statusElement.style.color = '#27ae60';
+      }
+    }
+
     // Initialize graphs
     initGraphs();
-    
+
     // Initial fetch
     fetchData();
-    
+
     // Set up interval to fetch data periodically
     setInterval(fetchData, 500);
   </script>
@@ -789,12 +821,12 @@ void handleRoot() {
 // Handler for telemetry data as JSON
 void handleTelemetry() {
   String telemetryData;
-  
+
   // Safely get telemetry data with mutex protection
   portENTER_CRITICAL(&webDataMux);
   telemetryData = String(webTelemetryBuffer);
   portEXIT_CRITICAL(&webDataMux);
-  
+
   // Parse telemetry data into JSON and send response
   String jsonData = parseTelemetryToJSON(telemetryData);
   webServer.send(200, "application/json", jsonData);
@@ -803,12 +835,12 @@ void handleTelemetry() {
 // Handler for log data as plain text
 void handleLogs() {
   String logData;
-  
+
   // Safely get log data with mutex protection
   portENTER_CRITICAL(&webDataMux);
   logData = String(webLogBuffer);
   portEXIT_CRITICAL(&webDataMux);
-  
+
   webServer.send(200, "text/plain", logData);
 }
 
@@ -818,10 +850,34 @@ void handleClear() {
   webServer.send(200, "text/plain", "Logs cleared");
 }
 
+// Handler for toggling config mode
+void handleToggleConfigMode() {
+  toggle_config_mode();
+
+  // If exiting config mode, save settings
+  if (get_config_mode() == false) {
+    save_melty_config_settings();
+  }
+
+  // Return current config mode status as JSON
+  String jsonResponse = "{\"configMode\":";
+  jsonResponse += get_config_mode() ? "true" : "false";
+  jsonResponse += "}";
+
+  webServer.send(200, "application/json", jsonResponse);
+
+  // Log the toggle
+  if (get_config_mode()) {
+    debug_print_safe("WEB", "Config mode ENABLED via web UI");
+  } else {
+    debug_print_safe("WEB", "Config mode DISABLED via web UI (settings saved)");
+  }
+}
+
 // Handler for EEPROM settings as JSON
 void handleEEPROM() {
   String jsonResult = "{";
-  
+
   // Include LED offset
   int ledOffset = load_heading_led_offset();
   jsonResult += "\"ledOffset\":{";
@@ -831,7 +887,7 @@ void handleEEPROM() {
   jsonResult += "\"unit\":\"%\",";
   jsonResult += "\"description\":\"Position of heading LED (percentage of rotation)\"";
   jsonResult += "},";
-  
+
   // Include accelerometer mount radius
   float accelRadius = load_accel_mount_radius();
   jsonResult += "\"accelRadius\":{";
@@ -841,7 +897,7 @@ void handleEEPROM() {
   jsonResult += "\"unit\":\"cm\",";
   jsonResult += "\"description\":\"Distance from center of rotation to accelerometer\"";
   jsonResult += "},";
-  
+
   // Include zero G offset
   float zeroGOffset = load_accel_zero_g_offset();
   jsonResult += "\"zeroGOffset\":{";
@@ -851,7 +907,7 @@ void handleEEPROM() {
   jsonResult += "\"unit\":\"g\",";
   jsonResult += "\"description\":\"Calibrated zero-point for accelerometer (when stationary)\"";
   jsonResult += "},";
-  
+
   // Add EEPROM sentinel value
   jsonResult += "\"eepromSentinel\":{";
   jsonResult += "\"name\":\"EEPROM Sentinel Value\",";
@@ -860,7 +916,7 @@ void handleEEPROM() {
   jsonResult += "\"unit\":\"\",";
   jsonResult += "\"description\":\"Changing this value will reset all EEPROM settings to defaults\"";
   jsonResult += "}";
-  
+
   jsonResult += "}";
   webServer.send(200, "application/json", jsonResult);
 }
@@ -878,7 +934,7 @@ class TinyLinePlot {
     // Get canvas element
     this.canvas = document.getElementById(elementId);
     this.ctx = this.canvas.getContext('2d');
-    
+
     // Default options
     this.options = {
       width: options.width || this.canvas.width || 300,
@@ -901,11 +957,11 @@ class TinyLinePlot {
       viewWindowSize: options.viewWindowSize || 50,
       autoScrollWithNewData: options.autoScrollWithNewData !== undefined ? options.autoScrollWithNewData : true
     };
-    
+
     // Set canvas dimensions
     this.canvas.width = this.options.width;
     this.canvas.height = this.options.height;
-    
+
     // Calculate plotting area
     this.plotArea = {
       x: this.options.padding * 1.5,
@@ -913,20 +969,20 @@ class TinyLinePlot {
       width: this.options.width - this.options.padding * 2.5,
       height: this.options.height - this.options.padding * 2
     };
-    
+
     // Initialize data
     this.datasets = [];
-    
+
     // Initialize view window (for scrolling through data)
     this.viewWindow = {
       start: 0,
       size: this.options.viewWindowSize
     };
-    
+
     // Track if we should auto-scroll with new data
     this.autoScroll = this.options.autoScrollWithNewData;
   }
-  
+
   addDataset(data, label = '') {
     const colorIndex = this.datasets.length % this.options.lineColors.length;
     this.datasets.push({
@@ -936,21 +992,21 @@ class TinyLinePlot {
     });
     return this;
   }
-  
+
   addPoint(datasetIndex, point) {
     if (datasetIndex < 0 || datasetIndex >= this.datasets.length) {
       console.error('Dataset index out of bounds');
       return this;
     }
-    
+
     const dataset = this.datasets[datasetIndex];
     dataset.data.push(point);
-    
+
     // If streaming is enabled and we're not retaining data, remove oldest points
     if (this.options.streaming && !this.options.retainData && dataset.data.length > this.options.maxPoints) {
       dataset.data = dataset.data.slice(-this.options.maxPoints);
     }
-    
+
     // If retaining data and streaming, adjust view window to show most recent data
     // but only if autoScroll is enabled
     if (this.options.streaming && this.options.retainData && this.autoScroll) {
@@ -959,10 +1015,10 @@ class TinyLinePlot {
         this.viewWindow.start = maxIdx - this.options.viewWindowSize + 1;
       }
     }
-    
+
     return this;
   }
-  
+
   clear() {
     this.datasets = [];
     this.ctx.clearRect(0, 0, this.options.width, this.options.height);
@@ -970,7 +1026,7 @@ class TinyLinePlot {
     this.autoScroll = this.options.autoScrollWithNewData;
     return this;
   }
-  
+
   // Clear a specific dataset
   clearDataset(datasetIndex) {
     if (datasetIndex >= 0 && datasetIndex < this.datasets.length) {
@@ -980,25 +1036,25 @@ class TinyLinePlot {
     this.autoScroll = this.options.autoScrollWithNewData;
     return this;
   }
-  
+
   // Enable auto-scrolling with new data
   enableAutoScroll() {
     this.autoScroll = true;
     return this;
   }
-  
+
   // Disable auto-scrolling with new data
   disableAutoScroll() {
     this.autoScroll = false;
     return this;
   }
-  
+
   // Toggle auto-scrolling with new data
   toggleAutoScroll() {
     this.autoScroll = !this.autoScroll;
     return this;
   }
-  
+
   // Scroll view window
   scroll(steps) {
     // Find maximum dataset length
@@ -1006,10 +1062,10 @@ class TinyLinePlot {
     this.datasets.forEach(dataset => {
       maxDataLength = Math.max(maxDataLength, dataset.data.length);
     });
-    
+
     // Calculate new start position
     const newStart = this.viewWindow.start + steps;
-    
+
     // Ensure we don't scroll past the data
     if (newStart >= 0 && newStart <= Math.max(0, maxDataLength - this.viewWindow.size)) {
       this.viewWindow.start = newStart;
@@ -1018,10 +1074,10 @@ class TinyLinePlot {
         this.autoScroll = false;
       }
     }
-    
+
     return this;
   }
-  
+
   // Jump to specific position
   scrollTo(position) {
     // Find maximum dataset length
@@ -1029,54 +1085,54 @@ class TinyLinePlot {
     this.datasets.forEach(dataset => {
       maxDataLength = Math.max(maxDataLength, dataset.data.length);
     });
-    
+
     // Check if position is at the latest data
     const isAtEnd = position >= maxDataLength - this.viewWindow.size;
-    
+
     // Validate position
     if (position >= 0 && position <= Math.max(0, maxDataLength - this.viewWindow.size)) {
       this.viewWindow.start = position;
-      
+
       // If not scrolling to the end, disable auto-scroll
       if (!isAtEnd) {
         this.autoScroll = false;
       }
     }
-    
+
     return this;
   }
-  
+
   // Scroll to the beginning of the data
   scrollToStart() {
     this.viewWindow.start = 0;
     this.autoScroll = false;
     return this;
   }
-  
+
   // Scroll to the end of the data (most recent)
   scrollToEnd() {
     let maxDataLength = 0;
     this.datasets.forEach(dataset => {
       maxDataLength = Math.max(maxDataLength, dataset.data.length);
     });
-    
+
     this.viewWindow.start = Math.max(0, maxDataLength - this.viewWindow.size);
     this.autoScroll = true;
     return this;
   }
-  
+
   findMinMax() {
     if (this.datasets.length === 0) return { minX: 0, maxX: 10, minY: 0, maxY: 10 };
-    
+
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    
+
     this.datasets.forEach(dataset => {
       // Only consider points within the current view window
       const start = this.options.retainData ? this.viewWindow.start : 0;
-      const end = this.options.retainData ? 
-        Math.min(start + this.viewWindow.size, dataset.data.length) : 
+      const end = this.options.retainData ?
+        Math.min(start + this.viewWindow.size, dataset.data.length) :
         dataset.data.length;
-      
+
       for (let i = start; i < end; i++) {
         const point = dataset.data[i];
         if (point) {
@@ -1087,16 +1143,16 @@ class TinyLinePlot {
         }
       }
     });
-    
+
     // If no points in view, return default
     if (minX === Infinity) {
       return { minX: 0, maxX: 10, minY: 0, maxY: 10 };
     }
-    
+
     // Add a small padding to the max/min values
     const rangeX = maxX - minX;
     const rangeY = maxY - minY;
-    
+
     return {
       minX: minX - rangeX * 0.05,
       maxX: maxX + rangeX * 0.05,
@@ -1104,103 +1160,103 @@ class TinyLinePlot {
       maxY: maxY + rangeY * 0.05
     };
   }
-  
+
   scalePoint(point, minMax) {
     return {
       x: this.plotArea.x + (point.x - minMax.minX) / (minMax.maxX - minMax.minX) * this.plotArea.width,
       y: this.plotArea.y + this.plotArea.height - (point.y - minMax.minY) / (minMax.maxY - minMax.minY) * this.plotArea.height
     };
   }
-  
+
   drawAxes(minMax) {
     const ctx = this.ctx;
-    
+
     // Draw axes
     ctx.beginPath();
     ctx.strokeStyle = this.options.axisColor;
     ctx.lineWidth = 1;
-    
+
     // X-axis
     ctx.moveTo(this.plotArea.x, this.plotArea.y + this.plotArea.height);
     ctx.lineTo(this.plotArea.x + this.plotArea.width, this.plotArea.y + this.plotArea.height);
-    
+
     // Y-axis
     ctx.moveTo(this.plotArea.x, this.plotArea.y);
     ctx.lineTo(this.plotArea.x, this.plotArea.y + this.plotArea.height);
-    
+
     ctx.stroke();
-    
+
     // Draw grid if enabled
     if (this.options.showGrid) {
       ctx.beginPath();
       ctx.strokeStyle = this.options.gridColor;
       ctx.lineWidth = 1;
-      
+
       // Number of grid lines
       const gridLinesX = 5;
       const gridLinesY = 5;
-      
+
       // X-axis grid lines
       for (let i = 1; i < gridLinesX; i++) {
         const x = this.plotArea.x + (i / gridLinesX) * this.plotArea.width;
         ctx.moveTo(x, this.plotArea.y);
         ctx.lineTo(x, this.plotArea.y + this.plotArea.height);
       }
-      
+
       // Y-axis grid lines
       for (let i = 1; i < gridLinesY; i++) {
         const y = this.plotArea.y + (i / gridLinesY) * this.plotArea.height;
         ctx.moveTo(this.plotArea.x, y);
         ctx.lineTo(this.plotArea.x + this.plotArea.width, y);
       }
-      
+
       ctx.stroke();
     }
-    
+
     // Draw labels and ticks
     ctx.fillStyle = this.options.labelColor;
     ctx.font = '10px Arial';
     ctx.textAlign = 'center';
-    
+
     // X-axis ticks and labels
     const ticksX = 5;
     for (let i = 0; i <= ticksX; i++) {
       const x = this.plotArea.x + (i / ticksX) * this.plotArea.width;
       const value = minMax.minX + (i / ticksX) * (minMax.maxX - minMax.minX);
-      
+
       // Draw tick
       ctx.beginPath();
       ctx.moveTo(x, this.plotArea.y + this.plotArea.height);
       ctx.lineTo(x, this.plotArea.y + this.plotArea.height + 5);
       ctx.stroke();
-      
+
       // Draw label
       ctx.fillText(value.toFixed(1), x, this.plotArea.y + this.plotArea.height + 15);
     }
-    
+
     // Y-axis ticks and labels
     const ticksY = 5;
     ctx.textAlign = 'right';
     for (let i = 0; i <= ticksY; i++) {
       const y = this.plotArea.y + (1 - i / ticksY) * this.plotArea.height;
       const value = minMax.minY + (i / ticksY) * (minMax.maxY - minMax.minY);
-      
+
       // Draw tick
       ctx.beginPath();
       ctx.moveTo(this.plotArea.x, y);
       ctx.lineTo(this.plotArea.x - 5, y);
       ctx.stroke();
-      
+
       // Draw label
       ctx.fillText(value.toFixed(1), this.plotArea.x - 8, y + 3);
     }
-    
+
     // Draw axis labels
     if (this.options.xLabel) {
       ctx.textAlign = 'center';
       ctx.fillText(this.options.xLabel, this.plotArea.x + this.plotArea.width / 2, this.options.height - 5);
     }
-    
+
     if (this.options.yLabel) {
       ctx.save();
       ctx.translate(10, this.plotArea.y + this.plotArea.height / 2);
@@ -1209,7 +1265,7 @@ class TinyLinePlot {
       ctx.fillText(this.options.yLabel, 0, 0);
       ctx.restore();
     }
-    
+
     // Draw title
     if (this.options.title) {
       ctx.textAlign = 'center';
@@ -1217,46 +1273,46 @@ class TinyLinePlot {
       ctx.fillText(this.options.title, this.plotArea.x + this.plotArea.width / 2, 15);
     }
   }
-  
+
   draw() {
     // Clear canvas
     this.ctx.fillStyle = this.options.backgroundColor;
     this.ctx.fillRect(0, 0, this.options.width, this.options.height);
-    
+
     // If no data, just draw empty axes
     if (this.datasets.length === 0) {
       this.drawAxes({ minX: 0, maxX: 10, minY: 0, maxY: 10 });
       return this;
     }
-    
+
     // Find min and max values
     const minMax = this.findMinMax();
-    
+
     // Draw axes and grid
     this.drawAxes(minMax);
-    
+
     // Draw each dataset
     this.datasets.forEach((dataset, datasetIndex) => {
       // Only consider points within the current view window
       const start = this.options.retainData ? this.viewWindow.start : 0;
-      const end = this.options.retainData ? 
-        Math.min(start + this.viewWindow.size, dataset.data.length) : 
+      const end = this.options.retainData ?
+        Math.min(start + this.viewWindow.size, dataset.data.length) :
         dataset.data.length;
-      
+
       if (end - start < 1) return; // Skip if no data points in view
-      
+
       this.ctx.strokeStyle = dataset.color;
       this.ctx.lineWidth = this.options.lineWidth;
       this.ctx.beginPath();
-      
+
       // Draw data line
       let firstPoint = true;
       for (let i = start; i < end; i++) {
         const point = dataset.data[i];
         if (!point) continue;
-        
+
         const scaledPoint = this.scalePoint(point, minMax);
-        
+
         if (firstPoint) {
           this.ctx.moveTo(scaledPoint.x, scaledPoint.y);
           firstPoint = false;
@@ -1264,29 +1320,29 @@ class TinyLinePlot {
           this.ctx.lineTo(scaledPoint.x, scaledPoint.y);
         }
       }
-      
+
       this.ctx.stroke();
-      
+
       // Draw points if dotSize is set
       if (this.options.dotSize > 0) {
         this.ctx.fillStyle = dataset.color;
-        
+
         for (let i = start; i < end; i++) {
           const point = dataset.data[i];
           if (!point) continue;
-          
+
           const scaledPoint = this.scalePoint(point, minMax);
-          
+
           this.ctx.beginPath();
           this.ctx.arc(scaledPoint.x, scaledPoint.y, this.options.dotSize, 0, Math.PI * 2);
           this.ctx.fill();
         }
       }
     });
-    
+
     return this;
   }
-  
+
   getDataLength() {
     let maxLength = 0;
     this.datasets.forEach(dataset => {
@@ -1296,7 +1352,7 @@ class TinyLinePlot {
   }
 }
 )";
-  
+
   webServer.send(200, "application/javascript", tinyLinePlotJS);
 }
 
@@ -1310,7 +1366,7 @@ void handleNotFound() {
 String parseTelemetryToJSON(const String& telemetryData) {
   // Initialize JSON structure
   String jsonResult = "{";
-  
+
   // Extract values from the telemetry string
   float gForce = 0.0f;
   int motor1Throttle = 0;
@@ -1321,13 +1377,13 @@ String parseTelemetryToJSON(const String& telemetryData) {
   float accelX = 0.0f;
   float accelY = 0.0f;
   float accelZ = 0.0f;
-  
+
   // Accelerometer data
   int rawAccelPos = telemetryData.indexOf("Raw Accel G:");
   if (rawAccelPos >= 0) {
     gForce = telemetryData.substring(rawAccelPos + 12).toFloat();
   }
-  
+
   // Parse individual accelerometer X, Y, Z values
   int accelXYZPos = telemetryData.indexOf("Accel X:");
   if (accelXYZPos >= 0) {
@@ -1335,12 +1391,12 @@ String parseTelemetryToJSON(const String& telemetryData) {
     int yPos = telemetryData.indexOf("Y:", accelXYZPos);
     if (yPos > 0) {
       accelX = telemetryData.substring(accelXYZPos + 8, yPos - 1).toFloat();
-      
+
       // Find Z position to determine the end of Y value
       int zPos = telemetryData.indexOf("Z:", yPos);
       if (zPos > 0) {
         accelY = telemetryData.substring(yPos + 3, zPos - 1).toFloat();
-        
+
         // Find end of Z value (usually "Used value:" or end of line)
         int usedPos = telemetryData.indexOf("Used value:", zPos);
         if (usedPos > 0) {
@@ -1358,7 +1414,7 @@ String parseTelemetryToJSON(const String& telemetryData) {
       }
     }
   }
-  
+
   // RC Throttle data
   int throttlePos = telemetryData.indexOf("RC Throttle:");
   if (throttlePos >= 0) {
@@ -1366,13 +1422,13 @@ String parseTelemetryToJSON(const String& telemetryData) {
     motor1Throttle = rcThrottle; // Assume same for both motors unless specified
     motor2Throttle = rcThrottle; // Assume same for both motors unless specified
   }
-  
+
   // RC Steering data
   int steeringPos = telemetryData.indexOf("RC Steering:");
   if (steeringPos >= 0) {
     rcSteering = telemetryData.substring(steeringPos + 12).toInt();
   }
-  
+
   // Motor PWM values for more accurate throttle percentage
   int motor1PWMPos = telemetryData.indexOf("Motor1 PWM:");
   if (motor1PWMPos >= 0) {
@@ -1382,7 +1438,7 @@ String parseTelemetryToJSON(const String& telemetryData) {
       motor1Throttle = (pwmValue - 1500) / 5; // 500 range maps to 0-100%
     }
   }
-  
+
   int motor2PWMPos = telemetryData.indexOf("Motor2 PWM:");
   if (motor2PWMPos >= 0) {
     int pwmValue = telemetryData.substring(motor2PWMPos + 11).toInt();
@@ -1391,13 +1447,13 @@ String parseTelemetryToJSON(const String& telemetryData) {
       motor2Throttle = (pwmValue - 1500) / 5; // 500 range maps to 0-100%
     }
   }
-  
+
   // Get the accelerometer used value from X: Y: Z: Used value: format
   int usedValuePos = telemetryData.indexOf("Used value:");
   if (usedValuePos >= 0) {
     accelUsed = telemetryData.substring(usedValuePos + 11).toFloat();
   }
-  
+
   // Build JSON object with all values
   jsonResult += "\"gForce\":" + String(gForce, 2) + ",";
   jsonResult += "\"motor1Throttle\":" + String(motor1Throttle) + ",";
@@ -1408,16 +1464,16 @@ String parseTelemetryToJSON(const String& telemetryData) {
   jsonResult += "\"accelX\":" + String(accelX, 3) + ",";
   jsonResult += "\"accelY\":" + String(accelY, 3) + ",";
   jsonResult += "\"accelZ\":" + String(accelZ, 3);
-  
+
   // Add additional data that might be useful
-  
+
   // Battery voltage if available
   int batteryPos = telemetryData.indexOf("Battery:");
   if (batteryPos >= 0) {
     float battery = telemetryData.substring(batteryPos + 9).toFloat();
     jsonResult += ",\"battery\":" + String(battery, 2);
   }
-  
+
   // RPM if calculated (calculated in spin_control.cpp)
   int rpm = 0;
   int rpmPos = telemetryData.indexOf("RPM:");
@@ -1426,27 +1482,31 @@ String parseTelemetryToJSON(const String& telemetryData) {
   } else {
     // Calculate RPM from G-force using the formula: RPM = sqrt(G / (0.00001118 * r))
     float radius = 10.0; // Default radius in cm if not specified
-    
+
     // Get actual radius if available
     int radiusPos = telemetryData.indexOf("Radius:");
     if (radiusPos >= 0) {
       radius = telemetryData.substring(radiusPos + 8).toFloat();
     }
-    
+
     // Use the accelUsed value which already has the zero G offset subtracted
     if (accelUsed > 0.1) { // Only calculate if G-force is significant
       rpm = sqrt(accelUsed / (0.00001118 * radius));
     }
   }
   jsonResult += ",\"rpm\":" + String(rpm);
-  
+
   // Radius setting
   int radiusPos = telemetryData.indexOf("Radius:");
   if (radiusPos >= 0) {
     float radius = telemetryData.substring(radiusPos + 8).toFloat();
     jsonResult += ",\"radius\":" + String(radius, 2);
   }
-  
+
+  // Config mode status
+  bool configMode = get_config_mode();
+  jsonResult += ",\"configMode\":" + String(configMode ? "true" : "false");
+
   jsonResult += "}";
   return jsonResult;
 }
@@ -1456,7 +1516,7 @@ void update_web_data(const String& telemetry, const String& logs) {
   portENTER_CRITICAL(&webDataMux);
   strncpy(webTelemetryBuffer, telemetry.c_str(), sizeof(webTelemetryBuffer) - 1);
   webTelemetryBuffer[sizeof(webTelemetryBuffer) - 1] = '\0';
-  
+
   strncpy(webLogBuffer, logs.c_str(), sizeof(webLogBuffer) - 1);
   webLogBuffer[sizeof(webLogBuffer) - 1] = '\0';
   portEXIT_CRITICAL(&webDataMux);
@@ -1467,7 +1527,7 @@ void web_server_task(void *parameter) {
 #ifdef ENABLE_WIFI
   // Use configured WiFi power level
   WiFi.setTxPower(WIFI_POWER_LEVEL);
-  
+
 #ifdef DISABLE_WIFI_POWER_SAVE
   // Disable power saving mode
   WiFi.setSleep(false);
@@ -1477,37 +1537,38 @@ void web_server_task(void *parameter) {
   // Configure access point
   String wifiMsg = "Setting up WiFi access point: " + String(ssid);
   debug_print_safe("WEB", wifiMsg);
-  
+
   WiFi.mode(WIFI_AP);
   WiFi.softAP(ssid, password);
   IPAddress myIP = WiFi.softAPIP();
-  
+
   String ipMsg = "Web server started with IP: " + myIP.toString();
   debug_print_safe("WEB", ipMsg);
-  
+
   // Set up web server handlers
   webServer.on("/", HTTP_GET, handleRoot);
   webServer.on("/telemetry", HTTP_GET, handleTelemetry);
   webServer.on("/logs", HTTP_GET, handleLogs);
   webServer.on("/clear", HTTP_POST, handleClear);
+  webServer.on("/toggle-config", HTTP_POST, handleToggleConfigMode);
   webServer.on("/eeprom", HTTP_GET, handleEEPROM);
   webServer.on("/TinyLinePlot.js", HTTP_GET, handleTinyLinePlotJS);
-  
+
   // Serve main page for any requested path
   webServer.onNotFound(handleNotFound);
-  
+
   // Start the server
   webServer.begin();
   server_running = true;
-  
+
   String readyMsg = "Web interface is ready at http://" + myIP.toString();
   debug_print_safe("WEB", readyMsg);
-  
+
   // Main loop for the web server task
   while (true) {
     // Process web server requests
     webServer.handleClient();
-    
+
     // Small delay to avoid hogging CPU
     delay(10);
   }
@@ -1519,7 +1580,7 @@ void start_web_server() {
 #ifdef ENABLE_WIFI
 #ifdef ENABLE_WEBSERVER
     debug_print_safe("WEBSERVER", "Starting web server task");
-    
+
     // Start the web server task on Core 0 (second core)
     xTaskCreatePinnedToCore(
         web_server_task,
@@ -1539,4 +1600,4 @@ void start_web_server() {
 // Function to initialize the web server (API compatibility wrapper)
 void init_web_server() {
   start_web_server();
-} 
+}
